@@ -9,6 +9,7 @@ function Popup() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Try to load data immediately
     loadData();
 
     const listener = (message: any) => {
@@ -19,22 +20,35 @@ function Popup() {
 
     chrome.runtime.onMessage.addListener(listener);
 
-    const interval = setInterval(loadData, 2000);
+    // Retry loading data every 2 seconds, but only if we don't have data yet
+    const interval = setInterval(() => {
+      if (!data) {
+        loadData();
+      }
+    }, 2000);
 
     return () => {
       chrome.runtime.onMessage.removeListener(listener);
       clearInterval(interval);
     };
-  }, []);
+  }, [data]);
 
   const loadData = async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-      if (response.success) {
+      if (response && response.success) {
         setData(response.data);
       }
     } catch (error) {
-      console.error('Failed to load data:', error);
+      // Check if it's a connection error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Could not establish connection') || 
+          errorMessage.includes('Receiving end does not exist')) {
+        console.debug('Popup: Service worker not ready yet');
+        // Don't show error to user, just retry later
+      } else {
+        console.error('Failed to load data:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,11 +57,17 @@ function Popup() {
   const toggleProtection = async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_PROTECTION' });
-      if (response.success) {
+      if (response && response.success) {
         await loadData();
       }
     } catch (error) {
-      console.error('Failed to toggle protection:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Could not establish connection') || 
+          errorMessage.includes('Receiving end does not exist')) {
+        console.debug('Popup: Service worker not ready for toggle');
+      } else {
+        console.error('Failed to toggle protection:', error);
+      }
     }
   };
 
