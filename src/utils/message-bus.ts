@@ -78,12 +78,12 @@ class MessageBus {
     logger.debug('MessageBus', `Sending message: ${type}`, { requestId, data });
 
     return new Promise((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         this.pendingRequests.delete(requestId);
         const error = new Error(`Message timeout: ${type}`);
         logger.warn('MessageBus', `Message timeout: ${type}`, { requestId });
         reject(error);
-      }, timeout);
+      }, timeout) as unknown as number;
 
       this.pendingRequests.set(requestId, {
         resolve,

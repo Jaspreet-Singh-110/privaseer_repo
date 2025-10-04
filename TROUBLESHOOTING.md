@@ -1,5 +1,47 @@
 # Troubleshooting Guide
 
+## Error: Service Worker Registration Failed
+
+### Problem
+You see this error:
+```
+Service worker registration failed (Status code: 15)
+Uncaught ReferenceError: window is not defined
+```
+
+### Root Cause
+Service workers don't have access to the `window` object. Code trying to use `window.setTimeout` or `window.clearTimeout` will fail.
+
+### Solution ✅
+Use global `setTimeout` and `clearTimeout` instead of `window.setTimeout`:
+
+```typescript
+// ❌ Wrong (service worker)
+window.setTimeout(() => {}, 1000);
+
+// ✅ Correct (service worker)
+setTimeout(() => {}, 1000);
+```
+
+### How to Apply Fix
+
+1. **Rebuild the extension:**
+   ```bash
+   npm run build
+   ```
+
+2. **Reload the extension in Chrome:**
+   - Go to `chrome://extensions/`
+   - Find "Privaseer"
+   - Click the refresh icon (🔄)
+
+3. **Verify the fix:**
+   - Check service worker console for errors
+   - Extension should load without errors
+   - All features should work
+
+---
+
 ## Error: "Failed to fetch" in Content Scanner
 
 ### Problem
