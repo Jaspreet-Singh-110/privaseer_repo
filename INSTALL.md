@@ -163,4 +163,32 @@ For issues or questions:
 
 ## Version
 
-Current Version: 1.0.0
+Current Version: 2.0.0
+
+## What's New in v2.0
+
+- ✅ **Real Pause/Resume**: Shield button now actually pauses blocking
+- ✅ **Per-Tab Badge**: Badge shows count specific to each tab
+- ✅ **Expanded Tracker List**: 30+ blocking rules, 120+ tracker domains
+- ✅ **Tracker Info**: Click info button to learn what trackers do and see alternatives
+- ✅ **Better Code Quality**: Industry-standard architecture and practices
+
+## Updating from v1.0
+
+1. Pull latest code
+2. Run `npm run build`
+3. Reload extension in Chrome
+4. All existing data preserved automatically
+
+## Important Notes
+
+### After Installing/Updating
+
+If you see "Failed to fetch" errors in console:
+
+1. Make sure you rebuilt: `npm run build`
+2. Reload the extension in `chrome://extensions/`
+3. Refresh any open tabs
+4. The error should disappear
+
+The extension now includes `web_accessible_resources` in the manifest to allow content scripts to access data files. This is required for the cookie consent scanner to work properly.
