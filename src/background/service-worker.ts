@@ -38,6 +38,11 @@ chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading' && tab.url && !tab.url.startsWith('chrome://')) {
+    FirewallEngine.resetTabBlockCount(tabId);
+    await FirewallEngine.updateCurrentTabBadge(tabId);
+  }
+
   if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
     try {
       await FirewallEngine.checkPageForTrackers(tabId, tab.url);
@@ -45,6 +50,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       console.error('Error checking page:', error);
     }
   }
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    await FirewallEngine.updateCurrentTabBadge(activeInfo.tabId);
+  } catch (error) {
+    console.error('Error updating badge on tab switch:', error);
+  }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  FirewallEngine.resetTabBlockCount(tabId);
 });
 
 chrome.runtime.onMessage.addListener((message: MessagePayload, sender, sendResponse) => {
@@ -67,6 +84,15 @@ async function handleMessage(message: MessagePayload, sender: chrome.runtime.Mes
       case 'TOGGLE_PROTECTION': {
         const enabled = await FirewallEngine.toggleProtection();
         return { success: true, enabled };
+      }
+
+      case 'GET_TRACKER_INFO': {
+        const domain = message.data?.domain;
+        if (!domain) {
+          return { success: false, error: 'Domain not provided' };
+        }
+        const info = FirewallEngine.getTrackerInfo(domain);
+        return { success: true, info };
       }
 
       case 'CONSENT_SCAN_RESULT': {
