@@ -2,9 +2,12 @@ import type { Alert, TrackerLists } from '../types';
 import { Storage } from './storage';
 import { PrivacyScoreManager } from './privacy-score';
 
+const RULESET_ID = 'tracker_blocklist';
+
 export class FirewallEngine {
   private static trackerLists: TrackerLists | null = null;
   private static isInitialized = false;
+  private static tabBlockCounts: Map<number, number> = new Map();
 
   static async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -13,6 +16,13 @@ export class FirewallEngine {
       const response = await fetch(chrome.runtime.getURL('data/tracker-lists.json'));
       this.trackerLists = await response.json();
       this.isInitialized = true;
+
+      const data = await Storage.get();
+      if (data.settings.protectionEnabled) {
+        await this.enableBlocking();
+      } else {
+        await this.disableBlocking();
+      }
 
       console.log('Firewall engine initialized with', this.getAllTrackerDomains().length, 'tracker domains');
     } catch (error) {
@@ -60,6 +70,9 @@ export class FirewallEngine {
       await Storage.incrementTrackerBlock(domain, category, isHighRisk);
 
       await PrivacyScoreManager.handleTrackerBlocked();
+
+      this.incrementTabBlockCount(tabId);
+      await this.updateTabBadge(tabId);
 
       const tab = await chrome.tabs.get(tabId);
       const siteDomain = tab.url ? new URL(tab.url).hostname : 'unknown';
@@ -125,11 +138,144 @@ export class FirewallEngine {
     const enabled = await Storage.toggleProtection();
 
     if (enabled) {
+      await this.enableBlocking();
       console.log('Protection enabled');
     } else {
+      await this.disableBlocking();
       console.log('Protection paused');
     }
 
     return enabled;
+  }
+
+  private static async enableBlocking(): Promise<void> {
+    try {
+      await chrome.declarativeNetRequest.updateEnabledRulesets({
+        enableRulesetIds: [RULESET_ID],
+      });
+      console.log('Blocking rules enabled');
+    } catch (error) {
+      console.error('Failed to enable blocking:', error);
+    }
+  }
+
+  private static async disableBlocking(): Promise<void> {
+    try {
+      await chrome.declarativeNetRequest.updateEnabledRulesets({
+        disableRulesetIds: [RULESET_ID],
+      });
+      console.log('Blocking rules disabled');
+    } catch (error) {
+      console.error('Failed to disable blocking:', error);
+    }
+  }
+
+  private static incrementTabBlockCount(tabId: number): void {
+    const currentCount = this.tabBlockCounts.get(tabId) || 0;
+    this.tabBlockCounts.set(tabId, currentCount + 1);
+  }
+
+  static resetTabBlockCount(tabId: number): void {
+    this.tabBlockCounts.set(tabId, 0);
+  }
+
+  private static async updateTabBadge(tabId: number): Promise<void> {
+    try {
+      const count = this.tabBlockCounts.get(tabId) || 0;
+      const badgeText = count > 0 ? count.toString() : '';
+
+      await chrome.action.setBadgeText({ text: badgeText, tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#DC2626', tabId });
+    } catch (error) {
+      console.error('Error updating tab badge:', error);
+    }
+  }
+
+  static async updateCurrentTabBadge(tabId: number): Promise<void> {
+    await this.updateTabBadge(tabId);
+  }
+
+  static getTrackerInfo(domain: string): { description: string; alternative: string } | null {
+    if (!this.trackerLists) return null;
+
+    const category = this.getTrackerCategory(domain);
+    const isHighRisk = this.isHighRisk(domain);
+
+    const trackerInfo: Record<string, { description: string; alternative: string }> = {
+      'google-analytics.com': {
+        description: 'Tracks user behavior and collects browsing data for website analytics',
+        alternative: 'Use privacy-focused analytics like Plausible or Simple Analytics'
+      },
+      'googletagmanager.com': {
+        description: 'Manages marketing tags and tracks user interactions across websites',
+        alternative: 'Self-host analytics or use server-side tracking solutions'
+      },
+      'doubleclick.net': {
+        description: 'Ad network that tracks users across websites for targeted advertising',
+        alternative: 'Support websites directly or use contextual ads like EthicalAds'
+      },
+      'facebook.net': {
+        description: 'Tracks user activity for Facebook advertising and social features',
+        alternative: 'Use privacy-focused social media like Mastodon or direct website subscriptions'
+      },
+      'connect.facebook.net': {
+        description: 'Facebook SDK that monitors user behavior for ad targeting',
+        alternative: 'Websites can use native share buttons instead of Facebook integration'
+      },
+      'mixpanel.com': {
+        description: 'Product analytics that tracks detailed user interactions and behavior',
+        alternative: 'Use open-source alternatives like PostHog or Matomo'
+      },
+      'hotjar.com': {
+        description: 'Records user sessions, heatmaps, and tracks on-page behavior',
+        alternative: 'Use privacy-respecting alternatives like Microsoft Clarity with anonymization'
+      },
+      'segment.com': {
+        description: 'Collects and routes user data to multiple analytics and marketing tools',
+        alternative: 'Implement direct server-side tracking or use RudderStack'
+      },
+      'criteo.com': {
+        description: 'Retargeting platform that follows users across websites to show ads',
+        alternative: 'Support content creators directly through subscriptions or donations'
+      },
+      'fingerprintjs.com': {
+        description: 'Creates unique browser fingerprints to identify users without cookies',
+        alternative: 'Websites should use consent-based authentication instead'
+      },
+    };
+
+    for (const [key, info] of Object.entries(trackerInfo)) {
+      if (domain.includes(key)) {
+        return info;
+      }
+    }
+
+    const categoryDescriptions: Record<string, { description: string; alternative: string }> = {
+      analytics: {
+        description: 'Collects data about how users interact with websites',
+        alternative: 'Use privacy-focused analytics like Plausible or Fathom'
+      },
+      advertising: {
+        description: 'Tracks users across websites for targeted advertising',
+        alternative: 'Support websites through direct subscriptions or contextual ads'
+      },
+      social: {
+        description: 'Monitors user activity for social media platforms',
+        alternative: 'Use native sharing features or privacy-focused social networks'
+      },
+      fingerprinting: {
+        description: 'Identifies users by their unique browser characteristics',
+        alternative: 'Clear browsing data regularly and use privacy-focused browsers'
+      },
+      beacons: {
+        description: 'Tracks user behavior and conversions for advertisers',
+        alternative: 'Support creators directly instead of relying on ad revenue'
+      },
+    };
+
+    return categoryDescriptions[category] || {
+      description: 'Tracking service that collects user data',
+      alternative: 'Use privacy-focused alternatives or disable third-party tracking'
+    };
   }
 }

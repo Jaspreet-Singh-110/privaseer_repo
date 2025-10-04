@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import type { StorageData, Alert as AlertType } from '../types';
 import '../index.css';
 
@@ -140,6 +140,10 @@ function Popup() {
 }
 
 function AlertItem({ alert }: { alert: AlertType }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
+  const [loadingInfo, setLoadingInfo] = useState(false);
+
   const getSeverityIcon = () => {
     switch (alert.severity) {
       case 'high':
@@ -170,21 +174,79 @@ function AlertItem({ alert }: { alert: AlertType }) {
     return `${Math.floor(seconds / 86400)}d ago`;
   };
 
+  const loadTrackerInfo = async () => {
+    if (trackerInfo) {
+      setShowInfo(!showInfo);
+      return;
+    }
+
+    setLoadingInfo(true);
+    try {
+      const trackerDomain = alert.message.replace('Blocked ', '').trim();
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_TRACKER_INFO',
+        data: { domain: trackerDomain }
+      });
+
+      if (response.success && response.info) {
+        setTrackerInfo(response.info);
+        setShowInfo(true);
+      }
+    } catch (error) {
+      console.error('Failed to load tracker info:', error);
+    } finally {
+      setLoadingInfo(false);
+    }
+  };
+
+  const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
+
   return (
-    <div className="px-6 py-3 hover:bg-gray-50 transition-colors">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5">{getSeverityIcon()}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            {getTypeIcon()}
-            <span className="text-xs font-medium text-gray-900 truncate">{alert.message}</span>
-          </div>
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span className="truncate">{alert.domain}</span>
-            <span className="ml-2 whitespace-nowrap">{timeAgo(alert.timestamp)}</span>
+    <div className="hover:bg-gray-50 transition-colors">
+      <div className="px-6 py-3">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5">{getSeverityIcon()}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {getTypeIcon()}
+              <span className="text-xs font-medium text-gray-900 truncate">{alert.message}</span>
+              {isTrackerAlert && (
+                <button
+                  onClick={loadTrackerInfo}
+                  className="ml-auto p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                  title="Show tracker info"
+                  disabled={loadingInfo}
+                >
+                  {loadingInfo ? (
+                    <Activity className="w-3 h-3 animate-spin text-gray-400" />
+                  ) : (
+                    <Info className="w-3 h-3 text-gray-400 hover:text-blue-600" />
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span className="truncate">{alert.domain}</span>
+              <span className="ml-2 whitespace-nowrap">{timeAgo(alert.timestamp)}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {showInfo && trackerInfo && (
+        <div className="px-6 pb-3">
+          <div className="ml-5 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+            <div className="mb-2">
+              <span className="font-semibold text-blue-900">What it does: </span>
+              <span className="text-blue-800">{trackerInfo.description}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-blue-900">Alternative: </span>
+              <span className="text-blue-800">{trackerInfo.alternative}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
