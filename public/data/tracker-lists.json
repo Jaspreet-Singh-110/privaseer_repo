@@ -1,0 +1,90 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-04",
+  "categories": {
+    "analytics": [
+      "google-analytics.com",
+      "googletagmanager.com",
+      "doubleclick.net",
+      "stats.g.doubleclick.net",
+      "analytics.google.com",
+      "matomo.org",
+      "piwik.org",
+      "segment.com",
+      "segment.io",
+      "mixpanel.com",
+      "amplitude.com",
+      "hotjar.com",
+      "crazyegg.com",
+      "mouseflow.com",
+      "fullstory.com",
+      "heap.io",
+      "kissmetrics.com",
+      "chartbeat.com",
+      "quantserve.com",
+      "newrelic.com"
+    ],
+    "advertising": [
+      "facebook.net",
+      "connect.facebook.net",
+      "adnxs.com",
+      "adsrvr.org",
+      "advertising.com",
+      "pubmatic.com",
+      "rubiconproject.com",
+      "openx.net",
+      "taboola.com",
+      "outbrain.com",
+      "criteo.com",
+      "criteo.net",
+      "casalemedia.com",
+      "amazon-adsystem.com",
+      "adsystem.amazon.com",
+      "bidswitch.net",
+      "lijit.com",
+      "exponential.com",
+      "serving-sys.com",
+      "smartadserver.com"
+    ],
+    "social": [
+      "facebook.com/tr",
+      "connect.facebook.com",
+      "platform.twitter.com",
+      "analytics.twitter.com",
+      "platform.linkedin.com",
+      "snap.licdn.com",
+      "pinterest.com/ct",
+      "ct.pinterest.com",
+      "reddit.com/api/v1",
+      "tumblr.com/svc",
+      "instagram.com/logging"
+    ],
+    "fingerprinting": [
+      "fingerprintjs.com",
+      "clientjs.org",
+      "device.io",
+      "sojern.com",
+      "rlcdn.com",
+      "ipify.org",
+      "ipapi.co",
+      "extreme-ip-lookup.com"
+    ],
+    "beacons": [
+      "pixel.facebook.com",
+      "ct.pinterest.com",
+      "bat.bing.com",
+      "px.ads.linkedin.com",
+      "tr.snapchat.com",
+      "analytics.tiktok.com",
+      "static.ads-twitter.com"
+    ]
+  },
+  "highRisk": [
+    "doubleclick.net",
+    "facebook.net",
+    "connect.facebook.net",
+    "adnxs.com",
+    "criteo.com",
+    "fingerprintjs.com"
+  ]
+}
