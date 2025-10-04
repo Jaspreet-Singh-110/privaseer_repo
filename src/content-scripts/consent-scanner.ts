@@ -50,10 +50,15 @@ class ConsentScanner {
         timestamp: Date.now(),
       };
 
-      await chrome.runtime.sendMessage({
-        type: 'CONSENT_SCAN_RESULT',
-        data: result,
-      });
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'CONSENT_SCAN_RESULT',
+          data: result,
+        });
+      } catch (error) {
+        // Service worker might not be ready yet, ignore the error
+        console.debug('Consent scanner: Service worker not ready, skipping message');
+      }
     } catch (error) {
       console.error('Error scanning page:', error);
     }

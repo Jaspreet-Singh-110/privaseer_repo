@@ -1,112 +1,113 @@
 import { Storage } from './storage';
 import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
-import { logger } from '../utils/logger';
-import { messageBus } from '../utils/message-bus';
-import { tabManager } from '../utils/tab-manager';
 import type { MessagePayload, ConsentScanResult } from '../types';
+
+let isInitialized = false;
 
 async function initializeExtension(): Promise<void> {
   try {
-    logger.info('ServiceWorker', 'Initializing extension...');
+    console.log('Privaseer: Initializing extension...');
 
-    await logger.initialize();
-    await messageBus.initialize();
-    await tabManager.initialize();
     await Storage.initialize();
     await FirewallEngine.initialize();
 
     await chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
 
     setupMessageHandlers();
+    isInitialized = true;
 
-    logger.info('ServiceWorker', 'Extension initialized successfully', {
-      tabs: tabManager.getStats(),
-    });
-
-    messageBus.broadcast('EXTENSION_READY');
+    console.log('Privaseer: Extension initialized successfully');
   } catch (error) {
-    logger.error('ServiceWorker', 'Extension initialization failed', error);
+    console.error('Privaseer: Extension initialization failed:', error);
     throw error;
   }
 }
 
 function setupMessageHandlers(): void {
-  messageBus.on('GET_STATE', async () => {
-    logger.debug('ServiceWorker', 'Getting extension state');
-    const data = await Storage.get();
-    return { success: true, data };
-  });
-
-  messageBus.on('TOGGLE_PROTECTION', async () => {
-    logger.info('ServiceWorker', 'Toggling protection');
-    const enabled = await FirewallEngine.toggleProtection();
-    return { success: true, enabled };
-  });
-
-  messageBus.on('GET_TRACKER_INFO', async (data) => {
-    const domain = data?.domain;
-    if (!domain) {
-      logger.warn('ServiceWorker', 'GET_TRACKER_INFO called without domain');
-      return { success: false, error: 'Domain not provided' };
-    }
-
-    logger.debug('ServiceWorker', 'Getting tracker info', { domain });
-    const info = FirewallEngine.getTrackerInfo(domain);
-    return { success: true, info };
-  });
-
-  messageBus.on('CONSENT_SCAN_RESULT', async (data) => {
-    const result = data as ConsentScanResult;
-
-    logger.debug('ServiceWorker', 'Consent scan result received', {
-      url: result.url,
-      isCompliant: result.isCompliant,
+  chrome.runtime.onMessage.addListener((message: MessagePayload, sender, sendResponse) => {
+    handleMessage(message, sender).then(sendResponse).catch(error => {
+      console.error('Privaseer: Message handler error:', error);
+      sendResponse({ error: error.message });
     });
-
-    if (!result.isCompliant) {
-      await PrivacyScoreManager.handleNonCompliantSite();
-
-      const urlObj = new URL(result.url);
-      const domain = urlObj.hostname;
-
-      await Storage.addAlert({
-        id: `${Date.now()}-${Math.random()}`,
-        type: 'non_compliant_site',
-        severity: 'medium',
-        message: `${domain} has deceptive cookie banner`,
-        domain,
-        timestamp: Date.now(),
-        url: result.url,
-      });
-
-      logger.warn('ServiceWorker', 'Non-compliant cookie banner detected', {
-        domain,
-        patterns: result.deceptivePatterns,
-      });
-
-      messageBus.broadcast('STATE_UPDATE');
-    }
-
-    return { success: true };
+    return true;
   });
 }
 
+async function handleMessage(message: MessagePayload, sender: chrome.runtime.MessageSender): Promise<any> {
+  try {
+    // Check if extension is initialized
+    if (!isInitialized) {
+      console.log('Privaseer: Extension not initialized yet, initializing...');
+      await initializeExtension();
+    }
+
+    switch (message.type) {
+      case 'GET_STATE': {
+        const data = await Storage.get();
+        return { success: true, data };
+      }
+
+      case 'TOGGLE_PROTECTION': {
+        const enabled = await FirewallEngine.toggleProtection();
+        return { success: true, enabled };
+      }
+
+      case 'GET_TRACKER_INFO': {
+        const domain = message.data?.domain;
+        if (!domain) {
+          return { success: false, error: 'Domain not provided' };
+        }
+        const info = FirewallEngine.getTrackerInfo(domain);
+        return { success: true, info };
+      }
+
+      case 'CONSENT_SCAN_RESULT': {
+        const result = message.data as ConsentScanResult;
+
+        if (!result.isCompliant) {
+          await PrivacyScoreManager.handleNonCompliantSite();
+
+          const urlObj = new URL(result.url);
+          const domain = urlObj.hostname;
+
+          await Storage.addAlert({
+            id: `${Date.now()}-${Math.random()}`,
+            type: 'non_compliant_site',
+            severity: 'medium',
+            message: `${domain} has deceptive cookie banner`,
+            domain,
+            timestamp: Date.now(),
+            url: result.url,
+          });
+
+          chrome.runtime.sendMessage({ type: 'STATE_UPDATE' }).catch(() => {});
+        }
+
+        return { success: true };
+      }
+
+      default:
+        return { success: false, error: 'Unknown message type' };
+    }
+  } catch (error) {
+    console.error('Privaseer: Error handling message:', error);
+    throw error;
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
-  logger.info('ServiceWorker', 'Extension installed');
+  console.log('Privaseer: Extension installed');
   await initializeExtension();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  logger.info('ServiceWorker', 'Browser started');
+  console.log('Privaseer: Browser started');
   await initializeExtension();
 });
 
 chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
-  logger.debug('ServiceWorker', 'Rule matched', {
-    url: details.request.url,
-    tabId: details.request.tabId,
-  });
+  console.log('Privaseer: Rule matched:', details.request.url);
 
   if (details.request.tabId > 0) {
     await FirewallEngine.handleBlockedRequest(
@@ -118,44 +119,33 @@ chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'loading' && tab.url && !tab.url.startsWith('chrome://')) {
-    logger.debug('ServiceWorker', `Tab ${tabId} loading`, { url: tab.url });
     FirewallEngine.resetTabBlockCount(tabId);
-    tabManager.resetBlockCount(tabId);
     await FirewallEngine.updateCurrentTabBadge(tabId);
   }
 
   if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
-    logger.debug('ServiceWorker', `Tab ${tabId} complete`, { url: tab.url });
     try {
       await FirewallEngine.checkPageForTrackers(tabId, tab.url);
     } catch (error) {
-      logger.error('ServiceWorker', 'Error checking page', error, { tabId });
+      console.error('Privaseer: Error checking page:', error);
     }
   }
 });
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  logger.debug('ServiceWorker', `Tab activated: ${activeInfo.tabId}`);
   try {
     await FirewallEngine.updateCurrentTabBadge(activeInfo.tabId);
   } catch (error) {
-    logger.error('ServiceWorker', 'Error updating badge', error, {
-      tabId: activeInfo.tabId,
-    });
+    console.error('Privaseer: Error updating badge:', error);
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  logger.debug('ServiceWorker', `Tab removed: ${tabId}`);
   FirewallEngine.resetTabBlockCount(tabId);
 });
 
 chrome.action.onClicked.addListener(() => {
-  logger.debug('ServiceWorker', 'Extension icon clicked');
+  console.log('Privaseer: Extension icon clicked');
 });
 
-setInterval(() => {
-  tabManager.cleanup();
-}, 60 * 60 * 1000);
-
-logger.info('ServiceWorker', 'Service worker loaded');
+console.log('Privaseer: Service worker loaded');
