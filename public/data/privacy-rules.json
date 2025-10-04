@@ -1,0 +1,71 @@
+{
+  "version": "1.0.0",
+  "cookieBannerSelectors": [
+    "[id*='cookie-banner']",
+    "[id*='cookie-consent']",
+    "[id*='cookie-notice']",
+    "[class*='cookie-banner']",
+    "[class*='cookie-consent']",
+    "[class*='cookie-notice']",
+    "[class*='gdpr']",
+    "[id*='gdpr']",
+    "#onetrust-banner-sdk",
+    ".onetrust-banner",
+    "#CybotCookiebotDialog",
+    ".cc-window",
+    ".cookie-policy",
+    "[aria-label*='cookie' i]",
+    "[aria-label*='privacy' i]",
+    "[role='dialog'][aria-label*='consent' i]"
+  ],
+  "rejectButtonPatterns": [
+    "reject all",
+    "reject cookies",
+    "decline all",
+    "deny all",
+    "refuse all",
+    "opt out",
+    "necessary only",
+    "essential only",
+    "no thanks",
+    "disable all"
+  ],
+  "acceptButtonPatterns": [
+    "accept all",
+    "accept cookies",
+    "allow all",
+    "agree",
+    "i accept",
+    "consent",
+    "ok",
+    "got it",
+    "continue"
+  ],
+  "complianceChecks": {
+    "rejectButtonRequired": true,
+    "rejectButtonVisibleWithoutScroll": true,
+    "equalProminence": true,
+    "noPreCheckedBoxes": true,
+    "explicitConsent": true
+  },
+  "deceptivePatterns": [
+    {
+      "name": "Hidden Reject",
+      "description": "Reject button hidden or hard to find",
+      "severity": "high",
+      "penalty": 5
+    },
+    {
+      "name": "Dark Pattern",
+      "description": "Accept button more prominent than reject",
+      "severity": "medium",
+      "penalty": 3
+    },
+    {
+      "name": "Forced Consent",
+      "description": "No reject option available",
+      "severity": "critical",
+      "penalty": 10
+    }
+  ]
+}
