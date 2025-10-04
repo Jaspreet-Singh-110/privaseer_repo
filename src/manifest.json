@@ -47,5 +47,15 @@
         "path": "data/blocking-rules.json"
       }
     ]
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "data/privacy-rules.json",
+        "data/tracker-lists.json",
+        "data/blocking-rules.json"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
