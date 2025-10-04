@@ -1,6 +1,35 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="24" fill="#2563EB"/>
-  <path d="M64 32C52 32 44 40 44 48C44 48 44 64 44 72C44 84 52 96 64 96C76 96 84 84 84 72C84 64 84 48 84 48C84 40 76 32 64 32Z" fill="white"/>
-  <path d="M64 48C60 48 56 52 56 56V72C56 76 60 80 64 80C68 80 72 76 72 72V56C72 52 68 48 64 48Z" fill="#2563EB"/>
-  <circle cx="64" cy="64" r="4" fill="white"/>
+  <!-- Background Circle -->
+  <circle cx="64" cy="64" r="56" fill="#2563EB"/>
+
+  <!-- Shield Shape -->
+  <path d="M 64 20
+           C 76 20, 88 24, 96 32
+           L 96 64
+           C 96 84, 82 100, 64 108
+           C 46 100, 32 84, 32 64
+           L 32 32
+           C 40 24, 52 20, 64 20 Z"
+        fill="white"
+        stroke="#1E40AF"
+        stroke-width="2"/>
+
+  <!-- Inner Shield Detail -->
+  <path d="M 64 32
+           C 73 32, 80 36, 84 42
+           L 84 64
+           C 84 78, 76 90, 64 96
+           C 52 90, 44 78, 44 64
+           L 44 42
+           C 48 36, 55 32, 64 32 Z"
+        fill="#2563EB"
+        opacity="0.15"/>
+
+  <!-- Checkmark -->
+  <path d="M 54 64 L 60 72 L 74 54"
+        stroke="#1E40AF"
+        stroke-width="6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
 </svg>

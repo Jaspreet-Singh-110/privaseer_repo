@@ -97,21 +97,52 @@ The extension icon shows a red badge with the number of trackers blocked **on th
 - Switch back to CNN → Badge shows "3" again
 - Navigate to new page → Badge resets to "0"
 
-## 🎯 New in v2.0
+## 🎯 What's New
 
-### 1. Real Pause/Resume Blocking ✅
+### v2.1 (Latest) - System Architecture Improvements
+
+#### 📝 Comprehensive Logging System
+- **4 log levels**: DEBUG, INFO, WARN, ERROR
+- **Persistent storage**: Logs survive browser restarts
+- **500 log entries**: Last 7 days of activity
+- **Queryable**: Filter by level, category, or time
+- **Export capability**: Download logs as JSON
+- See [LOGGING_GUIDE.md](LOGGING_GUIDE.md) for details
+
+#### 🔄 Advanced Message Bus
+- **Reliable communication**: Between all components
+- **Timeout handling**: 5-second timeout on requests
+- **Request tracking**: Monitor pending operations
+- **Broadcast support**: Notify all components instantly
+- See [ARCHITECTURE.md](ARCHITECTURE.md) for details
+
+#### 📊 Tab Lifecycle Manager
+- **Complete tracking**: All tab events monitored
+- **Active tab awareness**: Always knows current tab
+- **Auto-cleanup**: Removes stale tab data
+- **Statistics**: Track tabs and blocks across browser
+
+#### 🎨 Custom Shield Icon
+- **Professional design**: Blue shield with checkmark
+- **Visible in toolbar**: No more default icon
+- **All sizes**: 16px, 32px, 48px, 128px
+- **SVG source**: Scalable vector graphics
+
+### v2.0 - Core Feature Additions
+
+#### 1. Real Pause/Resume Blocking ✅
 Click the shield button to **actually** pause blocking. Previously only changed UI state, now it dynamically enables/disables blocking rules using Chrome's declarativeNetRequest API.
 
-### 2. Per-Tab Badge Counter ✅
+#### 2. Per-Tab Badge Counter ✅
 Badge now shows count specific to each tab. Switch tabs to see different counts. No more confusing global counter.
 
-### 3. Expanded Tracker List ✅
+#### 3. Expanded Tracker List ✅
 - **15 → 30+ blocking rules**
 - **50 → 120+ tracker domains**
 - New categories: Heatmaps, Affiliate tracking
 - Smart exceptions (e.g., don't block Facebook on Facebook.com)
 
-### 4. Tracker Information ✅
+#### 4. Tracker Information ✅
 Click the info button (ℹ️) next to any blocked tracker to see:
 - **What it does**: Simple explanation of the tracker
 - **Alternative**: Privacy-friendly replacement suggestion
@@ -127,7 +158,7 @@ Use privacy-focused analytics like Plausible
 or Simple Analytics
 ```
 
-### 5. Code Quality ✅
+#### 5. Code Quality ✅
 - Constants extracted to separate file
 - Centralized logging system
 - Proper error handling throughout
@@ -366,4 +397,14 @@ Inspired by privacy-focused projects:
 
 **Built with ❤️ for privacy-conscious users**
 
-Version: **2.0.0** | Last Updated: **2025-10-04** | Manifest: **V3**
+Version: **2.1.0** | Last Updated: **2025-10-04** | Manifest: **V3**
+
+## 📚 Documentation
+
+- [README.md](README.md) - This file, main documentation
+- [INSTALL.md](INSTALL.md) - Installation and setup guide
+- [IMPROVEMENTS.md](IMPROVEMENTS.md) - v2.0 feature changelog
+- [LOGGING_GUIDE.md](LOGGING_GUIDE.md) - Comprehensive logging system guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
+- [QUICK_FIX.md](QUICK_FIX.md) - Quick fix for "Failed to fetch" error
