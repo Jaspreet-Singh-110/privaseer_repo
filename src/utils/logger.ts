@@ -75,10 +75,10 @@ class Logger {
       clearTimeout(this.flushTimer);
     }
 
-    this.flushTimer = window.setTimeout(() => {
+    this.flushTimer = setTimeout(() => {
       this.saveLogs();
       this.flushTimer = null;
-    }, 5000);
+    }, 5000) as unknown as number;
   }
 
   private createLogEntry(
