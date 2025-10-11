@@ -1,4 +1,5 @@
 import type { ConsentScanResult, PrivacyRules } from '../types';
+import { logger } from '../utils/logger';
 
 class ConsentScanner {
   private rules: PrivacyRules | null = null;
@@ -6,6 +7,8 @@ class ConsentScanner {
 
   async initialize(): Promise<void> {
     try {
+      await logger.initialize();
+      
       const response = await fetch(chrome.runtime.getURL('data/privacy-rules.json'));
       this.rules = await response.json();
 
@@ -22,8 +25,10 @@ class ConsentScanner {
         childList: true,
         subtree: true,
       });
+      
+      logger.debug('ConsentScanner', 'Initialized successfully', { url: window.location.href });
     } catch (error) {
-      console.error('Failed to initialize consent scanner:', error);
+      logger.error('ConsentScanner', 'Failed to initialize consent scanner', error as Error);
     }
   }
 
@@ -55,12 +60,20 @@ class ConsentScanner {
           type: 'CONSENT_SCAN_RESULT',
           data: result,
         });
+        
+        if (!result.isCompliant) {
+          logger.warn('ConsentScanner', 'Non-compliant cookie banner detected', {
+            url: window.location.href,
+            hasRejectButton: result.hasRejectButton,
+            deceptivePatterns: result.deceptivePatterns
+          });
+        }
       } catch (error) {
         // Service worker might not be ready yet, ignore the error
-        console.debug('Consent scanner: Service worker not ready, skipping message');
+        logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
       }
     } catch (error) {
-      console.error('Error scanning page:', error);
+      logger.error('ConsentScanner', 'Error scanning page', error as Error);
     }
   }
 

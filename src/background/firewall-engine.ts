@@ -1,13 +1,15 @@
 import type { Alert, TrackerLists } from '../types';
 import { Storage } from './storage';
 import { PrivacyScoreManager } from './privacy-score';
+import { logger } from '../utils/logger';
+import { messageBus } from '../utils/message-bus';
+import { tabManager } from '../utils/tab-manager';
 
 const RULESET_ID = 'tracker_blocklist';
 
 export class FirewallEngine {
   private static trackerLists: TrackerLists | null = null;
   private static isInitialized = false;
-  private static tabBlockCounts: Map<number, number> = new Map();
 
   private static readonly RISK_WEIGHTS = {
     'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
@@ -35,9 +37,10 @@ export class FirewallEngine {
         await this.disableBlocking();
       }
 
-      console.log('Firewall engine initialized with', this.getAllTrackerDomains().length, 'tracker domains');
+      const domainCount = this.getAllTrackerDomains().length;
+      logger.info('FirewallEngine', 'Firewall engine initialized', { trackerDomains: domainCount });
     } catch (error) {
-      console.error('Failed to initialize firewall engine:', error);
+      logger.error('FirewallEngine', 'Failed to initialize firewall engine', error as Error);
       throw error;
     }
   }
@@ -101,7 +104,7 @@ export class FirewallEngine {
       // Use weighted scoring based on tracker risk level
       await PrivacyScoreManager.handleTrackerBlocked(riskWeight);
 
-      this.incrementTabBlockCount(tabId);
+      tabManager.incrementBlockCount(tabId);
       await this.updateTabBadge(tabId);
 
       const tab = await chrome.tabs.get(tabId);
@@ -133,9 +136,17 @@ export class FirewallEngine {
 
       await Storage.addAlert(alert);
 
+      logger.debug('FirewallEngine', 'Blocked tracker', { 
+        tracker: domain, 
+        category, 
+        riskWeight, 
+        tabId, 
+        site: siteDomain 
+      });
+
       this.notifyPopup();
     } catch (error) {
-      console.error('Error handling blocked request:', error);
+      logger.error('FirewallEngine', 'Error handling blocked request', error as Error, { url, tabId });
     }
   }
 
@@ -165,17 +176,16 @@ export class FirewallEngine {
         };
 
         await Storage.addAlert(alert);
+        logger.debug('FirewallEngine', 'Clean site detected', { domain, tabId });
         this.notifyPopup();
       }
     } catch (error) {
-      console.error('Error checking page for trackers:', error);
+      logger.error('FirewallEngine', 'Error checking page for trackers', error as Error, { tabId, url });
     }
   }
 
   private static notifyPopup(): void {
-    chrome.runtime.sendMessage({ type: 'STATE_UPDATE' }).catch(() => {
-      // Popup might not be open
-    });
+    messageBus.broadcast('STATE_UPDATE');
   }
 
   static async toggleProtection(): Promise<boolean> {
@@ -183,10 +193,10 @@ export class FirewallEngine {
 
     if (enabled) {
       await this.enableBlocking();
-      console.log('Protection enabled');
+      logger.info('FirewallEngine', 'Protection enabled');
     } else {
       await this.disableBlocking();
-      console.log('Protection paused');
+      logger.info('FirewallEngine', 'Protection paused');
     }
 
     return enabled;
@@ -197,9 +207,9 @@ export class FirewallEngine {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         enableRulesetIds: [RULESET_ID],
       });
-      console.log('Blocking rules enabled');
+      logger.info('FirewallEngine', 'Blocking rules enabled');
     } catch (error) {
-      console.error('Failed to enable blocking:', error);
+      logger.error('FirewallEngine', 'Failed to enable blocking', error as Error);
     }
   }
 
@@ -208,35 +218,31 @@ export class FirewallEngine {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         disableRulesetIds: [RULESET_ID],
       });
-      console.log('Blocking rules disabled');
+      logger.info('FirewallEngine', 'Blocking rules disabled');
     } catch (error) {
-      console.error('Failed to disable blocking:', error);
+      logger.error('FirewallEngine', 'Failed to disable blocking', error as Error);
     }
-  }
-
-  private static incrementTabBlockCount(tabId: number): void {
-    const currentCount = this.tabBlockCounts.get(tabId) || 0;
-    this.tabBlockCounts.set(tabId, currentCount + 1);
-  }
-
-  static resetTabBlockCount(tabId: number): void {
-    this.tabBlockCounts.set(tabId, 0);
   }
 
   private static async updateTabBadge(tabId: number): Promise<void> {
     try {
-      const count = this.tabBlockCounts.get(tabId) || 0;
+      const count = tabManager.getBlockCount(tabId);
       const badgeText = count > 0 ? count.toString() : '';
 
       await chrome.action.setBadgeText({ text: badgeText, tabId });
       await chrome.action.setBadgeBackgroundColor({ color: '#DC2626', tabId });
     } catch (error) {
-      console.error('Error updating tab badge:', error);
+      logger.error('FirewallEngine', 'Error updating tab badge', error as Error, { tabId });
     }
   }
 
   static async updateCurrentTabBadge(tabId: number): Promise<void> {
     await this.updateTabBadge(tabId);
+  }
+
+  static cleanup(): void {
+    logger.debug('FirewallEngine', 'Running cleanup');
+    // Cleanup is now handled by tabManager, but we can add any engine-specific cleanup here
   }
 
   static getTrackerInfo(domain: string): { description: string; alternative: string } | null {

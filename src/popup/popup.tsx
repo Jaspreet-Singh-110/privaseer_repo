@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import type { StorageData, Alert as AlertType } from '../types';
+import { logger } from '../utils/logger';
 import '../index.css';
 
 function Popup() {
@@ -9,6 +10,11 @@ function Popup() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initialize logger
+    logger.initialize().catch(() => {
+      // Silent fail if logger can't initialize
+    });
+
     // Try to load data immediately
     loadData();
 
@@ -44,10 +50,10 @@ function Popup() {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('Could not establish connection') || 
           errorMessage.includes('Receiving end does not exist')) {
-        console.debug('Popup: Service worker not ready yet');
+        logger.debug('Popup', 'Service worker not ready yet');
         // Don't show error to user, just retry later
       } else {
-        console.error('Failed to load data:', error);
+        logger.error('Popup', 'Failed to load data', error as Error);
       }
     } finally {
       setLoading(false);
@@ -59,14 +65,15 @@ function Popup() {
       const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_PROTECTION' });
       if (response && response.success) {
         await loadData();
+        logger.info('Popup', 'Protection toggled', { enabled: response.enabled });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('Could not establish connection') || 
           errorMessage.includes('Receiving end does not exist')) {
-        console.debug('Popup: Service worker not ready for toggle');
+        logger.debug('Popup', 'Service worker not ready for toggle');
       } else {
-        console.error('Failed to toggle protection:', error);
+        logger.error('Popup', 'Failed to toggle protection', error as Error);
       }
     }
   };
@@ -213,7 +220,7 @@ function AlertItem({ alert }: { alert: AlertType }) {
         setShowInfo(true);
       }
     } catch (error) {
-      console.error('Failed to load tracker info:', error);
+      logger.error('Popup', 'Failed to load tracker info', error as Error);
     } finally {
       setLoadingInfo(false);
     }

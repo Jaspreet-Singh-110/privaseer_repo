@@ -1,4 +1,5 @@
 import type { StorageData, PrivacyScore, Alert, TrackerData } from '../types';
+import { logger } from '../utils/logger';
 
 const DEFAULT_STORAGE_DATA: StorageData = {
   privacyScore: {
@@ -29,12 +30,14 @@ export class Storage {
       if (!data.privacyData) {
         await this.save(DEFAULT_STORAGE_DATA);
         this.cache = DEFAULT_STORAGE_DATA;
+        logger.info('Storage', 'Initialized with default data');
       } else {
         this.cache = data.privacyData;
         await this.checkDailyReset();
+        logger.info('Storage', 'Loaded existing data');
       }
     } catch (error) {
-      console.error('Storage initialization failed:', error);
+      logger.error('Storage', 'Storage initialization failed', error as Error);
       this.cache = DEFAULT_STORAGE_DATA;
     }
   }
@@ -50,8 +53,9 @@ export class Storage {
     try {
       await chrome.storage.local.set({ privacyData: data });
       this.cache = data;
+      logger.debug('Storage', 'Data saved successfully');
     } catch (error) {
-      console.error('Storage save failed:', error);
+      logger.error('Storage', 'Storage save failed', error as Error);
       throw error;
     }
   }

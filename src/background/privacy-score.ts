@@ -1,4 +1,5 @@
 import { Storage } from './storage';
+import { logger } from '../utils/logger';
 
 export class PrivacyScoreManager {
   private static readonly TRACKER_PENALTY = -1;
@@ -15,9 +16,10 @@ export class PrivacyScoreManager {
 
       await this.updateBadge(data.privacyScore.daily.trackersBlocked);
 
+      logger.debug('PrivacyScore', 'Tracker blocked', { penalty, newScore, riskWeight });
       return newScore;
     } catch (error) {
-      console.error('Error handling tracker block:', error);
+      logger.error('PrivacyScore', 'Error handling tracker block', error as Error);
       return 100;
     }
   }
@@ -29,9 +31,10 @@ export class PrivacyScoreManager {
       await Storage.updateScore(newScore);
       await Storage.recordCleanSite();
 
+      logger.debug('PrivacyScore', 'Clean site rewarded', { reward: this.CLEAN_SITE_REWARD, newScore });
       return newScore;
     } catch (error) {
-      console.error('Error handling clean site:', error);
+      logger.error('PrivacyScore', 'Error handling clean site', error as Error);
       return 100;
     }
   }
@@ -43,9 +46,10 @@ export class PrivacyScoreManager {
       await Storage.updateScore(newScore);
       await Storage.recordNonCompliantSite();
 
+      logger.warn('PrivacyScore', 'Non-compliant site detected', { penalty: this.NON_COMPLIANT_PENALTY, newScore });
       return newScore;
     } catch (error) {
-      console.error('Error handling non-compliant site:', error);
+      logger.error('PrivacyScore', 'Error handling non-compliant site', error as Error);
       return 100;
     }
   }
@@ -55,7 +59,7 @@ export class PrivacyScoreManager {
       const data = await Storage.get();
       return data.privacyScore.current;
     } catch (error) {
-      console.error('Error getting current score:', error);
+      logger.error('PrivacyScore', 'Error getting current score', error as Error);
       return 100;
     }
   }
@@ -67,7 +71,7 @@ export class PrivacyScoreManager {
       await chrome.action.setBadgeText({ text: badgeText });
       await chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
     } catch (error) {
-      console.error('Error updating badge:', error);
+      logger.error('PrivacyScore', 'Error updating badge', error as Error);
     }
   }
 
