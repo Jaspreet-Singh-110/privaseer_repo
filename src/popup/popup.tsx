@@ -9,8 +9,21 @@ import '../index.css';
 function PrivacyScoreMeter({ score }: { score: number }) {
   const [animatedScore, setAnimatedScore] = useState(0);
   const animationRef = useRef<number>();
+  const pathRef = useRef<SVGPathElement>(null);
+
+  const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
+  const scoreColorLight = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const radius = 80;
+  const strokeWidth = 12;
+  const normalizedRadius = radius - strokeWidth / 2;
+  const circumference = normalizedRadius * Math.PI; // Semi-circle circumference
 
   useEffect(() => {
+    // Set initial state immediately
+    if (pathRef.current) {
+      pathRef.current.style.strokeDashoffset = `${circumference}`;
+    }
+
     let startTime: number;
     const duration = 1500; // 1.5 seconds animation
 
@@ -25,6 +38,12 @@ function PrivacyScoreMeter({ score }: { score: number }) {
 
       setAnimatedScore(currentScore);
 
+      // Update path directly
+      if (pathRef.current) {
+        const offset = circumference - (currentScore / 100) * circumference;
+        pathRef.current.style.strokeDashoffset = `${offset}`;
+      }
+
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
       }
@@ -37,16 +56,7 @@ function PrivacyScoreMeter({ score }: { score: number }) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [score]);
-
-  const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
-  const scoreColorLight = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444';
-  const radius = 80;
-  const strokeWidth = 12;
-  const normalizedRadius = radius - strokeWidth / 2;
-  const circumference = normalizedRadius * Math.PI; // Semi-circle circumference
-  // Start from empty (full offset) and fill to the score
-  const strokeDashoffset = circumference - (animatedScore / 100) * circumference;
+  }, [score, circumference]);
 
   return (
     <div className="relative flex flex-col items-center" style={{ height: '110px' }}>
@@ -65,14 +75,15 @@ function PrivacyScoreMeter({ score }: { score: number }) {
         />
         {/* Animated score arc */}
         <path
+          ref={pathRef}
           d={`M ${strokeWidth / 2} ${radius + strokeWidth / 2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + strokeWidth / 2} ${radius + strokeWidth / 2}`}
           fill="none"
           stroke={`url(#gradient-${score})`}
           strokeWidth={strokeWidth}
           strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
           style={{
+            strokeDashoffset: circumference,
             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
           }}
         />
