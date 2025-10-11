@@ -5,10 +5,12 @@ export class PrivacyScoreManager {
   private static readonly CLEAN_SITE_REWARD = 2;
   private static readonly NON_COMPLIANT_PENALTY = -5;
 
-  static async handleTrackerBlocked(): Promise<number> {
+  static async handleTrackerBlocked(riskWeight: number = 1): Promise<number> {
     try {
       const data = await Storage.get();
-      const newScore = data.privacyScore.current + this.TRACKER_PENALTY;
+      // Apply risk-weighted penalty (e.g., fingerprinting = -5, analytics = -1)
+      const penalty = this.TRACKER_PENALTY * riskWeight;
+      const newScore = data.privacyScore.current + penalty;
       await Storage.updateScore(newScore);
 
       await this.updateBadge(data.privacyScore.daily.trackersBlocked);

@@ -9,6 +9,17 @@ export class FirewallEngine {
   private static isInitialized = false;
   private static tabBlockCounts: Map<number, number> = new Map();
 
+  private static readonly RISK_WEIGHTS = {
+    'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
+    'advertising': 2,      // Behavioral ads (DoubleClick, AdSense)
+    'social': 2,           // Social tracking (Facebook Pixel, Twitter Analytics)
+    'fingerprinting': 5,   // Device fingerprinting (FingerprintJS, CreepJS)
+    'beacons': 2,          // Tracking beacons (conversion tracking)
+    'cryptomining': 10,    // Malicious crypto mining
+    'malware': 20,         // Known malicious domains
+    'unknown': 1           // Default for unclassified trackers
+  };
+
   static async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -59,6 +70,23 @@ export class FirewallEngine {
     return this.trackerLists.highRisk.some(d => domain.includes(d));
   }
 
+  private static getRiskWeight(domain: string, category: string): number {
+    // Check for known malicious/high-risk domains first
+    const knownMalicious = ['coinhive', 'cryptoloot', 'coin-hive'];
+    if (knownMalicious.some(m => domain.includes(m))) {
+      return this.RISK_WEIGHTS['cryptomining'];
+    }
+
+    // Check for fingerprinting services
+    const fingerprintingServices = ['fingerprintjs', 'creepjs', 'canvas', 'clientjs'];
+    if (fingerprintingServices.some(f => domain.includes(f)) || category === 'fingerprinting') {
+      return this.RISK_WEIGHTS['fingerprinting'];
+    }
+
+    // Use category-based weight
+    return this.RISK_WEIGHTS[category as keyof typeof this.RISK_WEIGHTS] || this.RISK_WEIGHTS['unknown'];
+  }
+
   static async handleBlockedRequest(url: string, tabId: number): Promise<void> {
     try {
       const urlObj = new URL(url);
@@ -66,10 +94,12 @@ export class FirewallEngine {
 
       const category = this.getTrackerCategory(domain);
       const isHighRisk = this.isHighRisk(domain);
+      const riskWeight = this.getRiskWeight(domain, category);
 
       await Storage.incrementTrackerBlock(domain, category, isHighRisk);
 
-      await PrivacyScoreManager.handleTrackerBlocked();
+      // Use weighted scoring based on tracker risk level
+      await PrivacyScoreManager.handleTrackerBlocked(riskWeight);
 
       this.incrementTabBlockCount(tabId);
       await this.updateTabBadge(tabId);
@@ -77,11 +107,25 @@ export class FirewallEngine {
       const tab = await chrome.tabs.get(tabId);
       const siteDomain = tab.url ? new URL(tab.url).hostname : 'unknown';
 
+      // Adjust alert severity based on risk weight
+      const getSeverity = (): 'low' | 'medium' | 'high' => {
+        if (riskWeight >= 10) return 'high';
+        if (riskWeight >= 5) return 'high';
+        if (riskWeight >= 2) return 'medium';
+        return 'low';
+      };
+
+      const getAlertType = (): 'tracker_blocked' | 'high_risk' | 'non_compliant_site' => {
+        if (riskWeight >= 10) return 'high_risk';
+        if (isHighRisk) return 'high_risk';
+        return 'tracker_blocked';
+      };
+
       const alert: Alert = {
         id: `${Date.now()}-${Math.random()}`,
-        type: isHighRisk ? 'high_risk' : 'tracker_blocked',
-        severity: isHighRisk ? 'high' : 'low',
-        message: `Blocked ${domain}`,
+        type: getAlertType(),
+        severity: getSeverity(),
+        message: `Blocked ${domain}${riskWeight > 1 ? ` (${category}, risk: ${riskWeight}x)` : ''}`,
         domain: siteDomain,
         timestamp: Date.now(),
         url: tab.url,

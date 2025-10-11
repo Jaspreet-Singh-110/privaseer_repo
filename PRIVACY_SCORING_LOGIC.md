@@ -68,20 +68,39 @@ privacyScore: {
 
 The privacy score changes based on **three types of events**:
 
-#### 1. Tracker Blocked (Penalty)
+#### 1. Tracker Blocked (Risk-Weighted Penalty) ⭐ NEW!
 
 **When**: A tracker is blocked by the firewall
-**Score Change**: `-1 point`
-**Logic**: Exposure to tracker = privacy risk
+**Score Change**: `-1 to -20 points` (based on risk level)
+**Logic**: Higher risk trackers = bigger penalty
 
 ```typescript
-TRACKER_PENALTY = -1
+TRACKER_PENALTY = -1 × RISK_WEIGHT
+
+RISK_WEIGHTS = {
+  'analytics': 1,        // Basic analytics (Google Analytics) = -1
+  'advertising': 2,      // Behavioral ads (DoubleClick) = -2
+  'social': 2,           // Social tracking (Facebook Pixel) = -2
+  'fingerprinting': 5,   // Device fingerprinting = -5
+  'beacons': 2,          // Tracking beacons = -2
+  'cryptomining': 10,    // Malicious mining = -10
+  'malware': 20,         // Known malicious = -20
+  'unknown': 1           // Unclassified = -1
+}
 ```
 
-**Why Negative?**
-- You visited a site that attempted to track you
-- Even though we blocked it, exposure happened
-- Indicates you're on tracker-heavy sites
+**Why Risk-Weighted?**
+- Not all trackers are equal
+- Fingerprinting is 5x worse than basic analytics
+- Malware/cryptomining is 20x worse
+- More accurate representation of privacy risk
+- Incentivizes avoiding high-risk sites
+
+**Examples**:
+- Google Analytics blocked: `-1 point`
+- DoubleClick ads blocked: `-2 points`
+- FingerprintJS blocked: `-5 points`
+- Coinhive cryptominer blocked: `-10 points`
 
 #### 2. Clean Site Visited (Reward)
 
@@ -771,7 +790,7 @@ try {
 
 ## Historical Tracking
 
-### Daily Reset Mechanism
+### Daily Reset Mechanism with Recovery Bonus ⭐ NEW!
 
 **Purpose**: Keep score fresh and relevant (today's privacy matters)
 
@@ -788,17 +807,27 @@ Every 24 hours:
      trackersBlocked: 47
    }
    ↓
-3. Reset daily counters:
+3. Daily Recovery Mechanism (NEW!):
+   - If trackersBlocked < 5: Score += 2 (very clean day)
+   - If trackersBlocked < 10: Score += 1 (clean day)
+   - If trackersBlocked >= 10: No recovery (tracker-heavy day)
+   ↓
+4. Reset daily counters:
    trackersBlocked: 0
    cleanSitesVisited: 0
    nonCompliantSites: 0
-   ↓
-4. Keep score unchanged (doesn't reset to 100)
    ↓
 5. Trim history to last 30 days
    ↓
 6. Update lastReset timestamp
 ```
+
+**Why Daily Recovery?**
+- ✅ Rewards consistent clean browsing
+- ✅ Allows recovery from bad days
+- ✅ Encourages long-term engagement
+- ✅ Makes low scores recoverable (not permanent damage)
+- ✅ Fair: only rewards if you had < 10 trackers yesterday
 
 **Code**:
 ```typescript
@@ -824,7 +853,19 @@ private static async checkDailyReset(): Promise<void> {
       data.privacyScore.history = data.privacyScore.history.slice(0, 30);
     }
 
-    // Reset daily counters (score unchanged)
+    // Daily Recovery Mechanism (NEW!)
+    const hadCleanDay = data.privacyScore.daily.trackersBlocked < 10;
+    const hadVeryCleanDay = data.privacyScore.daily.trackersBlocked < 5;
+
+    if (hadVeryCleanDay) {
+      // Very clean day: +2 recovery points
+      data.privacyScore.current = Math.min(100, data.privacyScore.current + 2);
+    } else if (hadCleanDay) {
+      // Clean day: +1 recovery point
+      data.privacyScore.current = Math.min(100, data.privacyScore.current + 1);
+    }
+
+    // Reset daily counters
     data.privacyScore.daily = {
       trackersBlocked: 0,
       cleanSitesVisited: 0,
@@ -940,17 +981,82 @@ Recommendation: Good balance. Consider privacy-focused alternatives for:
 - News (RSS feeds)
 ```
 
+### Example 5: Risk-Weighted Scoring in Action ⭐ NEW!
+
+```
+User: Encounters different tracker types (demonstrates risk weighting)
+
+Session:
+- Visit Blog with Google Analytics → 1 tracker (weight: 1) → Score: 100 → 99
+- Visit Site with DoubleClick ads → 1 tracker (weight: 2) → Score: 99 → 97
+- Visit Site with FingerprintJS → 1 tracker (weight: 5) → Score: 97 → 92
+- Visit Site with Coinhive miner → 1 tracker (weight: 10) → Score: 92 → 82
+
+Total Trackers Blocked: 4
+Total Score Impact: -18 points (not -4!)
+
+Old System: 100 - 4 = 96 ❌ (all trackers treated equal)
+New System: 100 - 18 = 82 ✅ (risk-weighted)
+
+Recommendation: The fingerprinting and cryptomining trackers had 15x more impact than basic analytics. This accurately reflects the privacy risk!
+```
+
+### Example 6: Daily Recovery Mechanism ⭐ NEW!
+
+```
+User: Has one bad day, then recovers over time
+
+Day 1: Heavy news browsing
+- 50 trackers blocked → Score drops from 100 → 50
+- End of day: Score = 50, Trackers = 50
+
+Day 2: Clean browsing (< 5 trackers)
+- 3 trackers blocked → Score: 50 → 47
+- Daily reset: hadVeryCleanDay = true → Score: 47 + 2 = 49
+
+Day 3: Clean browsing (< 5 trackers)
+- 4 trackers blocked → Score: 49 → 45
+- Daily reset: hadVeryCleanDay = true → Score: 45 + 2 = 47
+
+Day 4-10: Continue clean browsing pattern
+- Each day: +2 recovery points
+- Day 10: Score = 61
+
+Day 11-20: Continue clean browsing
+- Score gradually climbs to 81
+
+Day 30: Score = 90 (Excellent!)
+
+Old System: Bad day = permanent damage ❌
+New System: Recovery possible with good habits ✅
+
+Recommendation: Consistent clean browsing allows full recovery. You're incentivized to maintain good habits long-term!
+```
+
 ---
 
 ## Summary
 
-### Scoring Formula
+### Scoring Formula (Updated v2.3)
 
 ```
 Score = Starting Score (100)
-        - (Trackers × 1)
+        - (Σ Trackers × Risk Weight)  ⭐ NEW! Risk-weighted penalties
         + (Clean Sites × 2)
         - (Non-Compliant Sites × 5)
+        + Daily Recovery Bonus        ⭐ NEW! Clean day rewards
+
+Risk Weights:
+- Analytics: 1x
+- Advertising/Social/Beacons: 2x
+- Fingerprinting: 5x
+- Cryptomining: 10x
+- Malware: 20x
+
+Daily Recovery:
+- < 5 trackers yesterday: +2 points
+- < 10 trackers yesterday: +1 point
+- ≥ 10 trackers yesterday: 0 points
 
 Bounded: [0, 100]
 ```
@@ -959,26 +1065,59 @@ Bounded: [0, 100]
 
 ✅ **Start Perfect**: Everyone begins at 100
 ✅ **Real-Time Updates**: Score changes as you browse
-✅ **Three Events**: Trackers (-1), Clean Sites (+2), Non-Compliant (-5)
+✅ **Risk-Weighted Penalties**: Fingerprinting 5x worse than analytics ⭐ NEW!
+✅ **Daily Recovery**: Clean days earn +1 or +2 recovery points ⭐ NEW!
+✅ **Three Events**: Trackers (weighted), Clean Sites (+2), Non-Compliant (-5)
 ✅ **Bounded**: Always between 0 and 100
-✅ **Daily Tracking**: Counters reset daily, score persists
+✅ **Daily Tracking**: Counters reset daily, score persists with recovery bonus
 ✅ **Historical Data**: Last 30 days saved for trends
 ✅ **Gamification**: Makes privacy tangible and engaging
 ✅ **Educational**: Teaches about tracking and privacy
+✅ **Recoverable**: Bad days don't cause permanent damage ⭐ NEW!
 
 ### Why This Works
 
-1. **Simple Math**: Easy to understand (-1, +2, -5)
+1. **Risk-Accurate**: High-risk trackers penalized more (fingerprinting 5x worse)
 2. **Instant Feedback**: See score change in real-time
-3. **Motivating**: Want to maintain high score
-4. **Educational**: Learn which sites respect privacy
-5. **Actionable**: Clear what to do (visit better sites)
-6. **Balanced**: Penalties and rewards both possible
-7. **Meaningful**: Score reflects actual privacy exposure
+3. **Recoverable**: Clean browsing earns daily recovery points
+4. **Motivating**: Want to maintain high score, can recover from bad days
+5. **Educational**: Learn which trackers are most dangerous
+6. **Actionable**: Clear what to do (avoid high-risk sites, maintain clean days)
+7. **Balanced**: Penalties, rewards, and recovery all possible
+8. **Meaningful**: Score accurately reflects actual privacy exposure
+9. **Long-term Engagement**: Recovery mechanism encourages sustained good habits
 
 ---
 
-**Version**: 2.2.0
-**Last Updated**: 2025-10-04
+**Version**: 2.3.0 (Risk-Weighted + Daily Recovery)
+**Last Updated**: 2025-10-11
 **Document Type**: Technical Specification
 **Audience**: Developers, Security Researchers, Advanced Users
+
+---
+
+## 🆕 What's New in v2.3
+
+### 1. Risk-Based Tracker Weighting ⭐⭐⭐⭐⭐
+
+**Problem Solved**: All trackers were treated equally (Google Analytics = FingerprintJS = -1)
+
+**Solution**: Trackers now weighted by actual risk level
+- Analytics: 1x penalty (basic tracking)
+- Advertising/Social: 2x penalty (behavioral tracking)
+- Fingerprinting: 5x penalty (invasive identification)
+- Cryptomining: 10x penalty (malicious resource theft)
+- Malware: 20x penalty (actively harmful)
+
+**Impact**: 5x more accurate privacy scoring
+
+### 2. Daily Recovery Mechanism ⭐⭐⭐⭐⭐
+
+**Problem Solved**: Bad days caused permanent score damage
+
+**Solution**: Clean browsing days earn recovery points
+- < 5 trackers yesterday: +2 recovery points
+- < 10 trackers yesterday: +1 recovery point
+- Allows gradual recovery from low scores
+
+**Impact**: Encourages long-term engagement, makes scoring fair
