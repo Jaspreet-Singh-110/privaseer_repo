@@ -1,25 +1,5 @@
 import { logger } from './logger';
-
-type MessageType =
-  | 'STATE_UPDATE'
-  | 'GET_STATE'
-  | 'TOGGLE_PROTECTION'
-  | 'CONSENT_SCAN_RESULT'
-  | 'GET_TRACKER_INFO'
-  | 'TAB_ACTIVATED'
-  | 'TAB_UPDATED'
-  | 'EXTENSION_READY';
-
-interface Message<T = any> {
-  type: MessageType;
-  data?: T;
-  requestId?: string;
-  timestamp?: number;
-}
-
-interface MessageHandler<T = any> {
-  (data: T, sender: chrome.runtime.MessageSender): Promise<any> | any;
-}
+import type { MessageType, Message, MessageHandler } from '../types';
 
 class MessageBus {
   private handlers = new Map<MessageType, MessageHandler[]>();

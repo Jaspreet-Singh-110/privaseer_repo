@@ -50,10 +50,30 @@ export interface StorageData {
   lastReset: number;
 }
 
-export interface MessagePayload {
-  type: 'TRACKER_BLOCKED' | 'CONSENT_SCAN_RESULT' | 'GET_STATE' | 'TOGGLE_PROTECTION' | 'STATE_UPDATE';
-  data?: any;
+export type MessageType =
+  | 'STATE_UPDATE'
+  | 'GET_STATE'
+  | 'TOGGLE_PROTECTION'
+  | 'CONSENT_SCAN_RESULT'
+  | 'GET_TRACKER_INFO'
+  | 'TRACKER_BLOCKED'
+  | 'TAB_ACTIVATED'
+  | 'TAB_UPDATED'
+  | 'EXTENSION_READY';
+
+export interface Message<T = any> {
+  type: MessageType;
+  data?: T;
+  requestId?: string;
+  timestamp?: number;
 }
+
+export interface MessageHandler<T = any> {
+  (data: T, sender: chrome.runtime.MessageSender): Promise<any> | any;
+}
+
+// Backward compatibility alias
+export type MessagePayload = Message;
 
 export interface TrackerLists {
   version: string;
