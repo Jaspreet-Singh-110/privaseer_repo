@@ -46,7 +46,7 @@ function PrivacyScoreMeter({ score }: { score: number }) {
   const normalizedRadius = radius - strokeWidth / 2;
   const circumference = normalizedRadius * Math.PI; // Semi-circle circumference
   // Start from empty (full offset) and fill to the score
-  const strokeDashoffset = circumference * (1 - animatedScore / 100);
+  const strokeDashoffset = circumference - (animatedScore / 100) * circumference;
 
   return (
     <div className="relative flex flex-col items-center" style={{ height: '110px' }}>
@@ -70,11 +70,9 @@ function PrivacyScoreMeter({ score }: { score: number }) {
           stroke={`url(#gradient-${score})`}
           strokeWidth={strokeWidth}
           strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={circumference}
+          strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
           style={{
-            strokeDashoffset: strokeDashoffset,
-            transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)',
             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
           }}
         />
