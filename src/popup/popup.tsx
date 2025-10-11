@@ -48,11 +48,11 @@ function PrivacyScoreMeter({ score }: { score: number }) {
   const strokeDashoffset = circumference - (animatedScore / 100) * circumference;
 
   return (
-    <div className="relative flex flex-col items-center">
+    <div className="relative flex flex-col items-center" style={{ height: '110px' }}>
       <svg
-        height={radius + strokeWidth}
+        height={radius + strokeWidth + 10}
         width={(radius + strokeWidth) * 2}
-        className="transform -rotate-90"
+        style={{ overflow: 'visible' }}
       >
         {/* Background arc */}
         <path
@@ -86,7 +86,7 @@ function PrivacyScoreMeter({ score }: { score: number }) {
       </svg>
 
       {/* Score display in center */}
-      <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -20%)' }}>
+      <div className="absolute" style={{ top: '45px', left: '50%', transform: 'translateX(-50%)' }}>
         <div className="flex flex-col items-center">
           <div className="flex items-baseline">
             <span className="text-4xl font-bold" style={{ color: scoreColor }}>
