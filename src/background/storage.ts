@@ -82,6 +82,18 @@ export class Storage {
     await this.saveWithRetry(data);
   }
 
+  static async savePenalizedDomains(penalizedDomains: Record<string, number>): Promise<void> {
+    try {
+      const data = await this.get();
+      data.penalizedDomains = penalizedDomains;
+      await this.save(data);
+      logger.debug('Storage', `Saved ${Object.keys(penalizedDomains).length} penalized domains`);
+    } catch (error) {
+      logger.error('Storage', 'Failed to save penalized domains', toError(error));
+      throw error;
+    }
+  }
+
   private static async saveWithRetry(data: StorageData, attempt: number = 1): Promise<void> {
     try {
       await chrome.storage.local.set({ privacyData: data });
@@ -242,12 +254,6 @@ export class Storage {
 
       await this.save(data);
     }
-  }
-
-  static async savePenalizedDomains(domains: Record<string, number>): Promise<void> {
-    if (!this.cache) return;
-    this.cache.penalizedDomains = domains;
-    this.scheduleSave();
   }
 
   static async clear(): Promise<void> {

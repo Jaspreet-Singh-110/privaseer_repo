@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { List, useDynamicRowHeight, useListCallbackRef } from 'react-window';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
@@ -11,15 +10,8 @@ function Popup() {
   const [data, setData] = useState<StorageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
-  const [listRef, setListRef] = useListCallbackRef();
-  
-  const dynamicRowHeight = useDynamicRowHeight({
-    defaultRowHeight: 60,
-    key: 'alert-list'
-  });
 
   useEffect(() => {
-    // Try to load data immediately
     loadData();
 
     const listener = (message: Message) => {
@@ -30,7 +22,6 @@ function Popup() {
 
     chrome.runtime.onMessage.addListener(listener);
 
-    // Retry loading data every 2 seconds, but only if we don't have data yet
     const interval = setInterval(() => {
       if (!data) {
         loadData();
@@ -50,13 +41,11 @@ function Popup() {
         setData(response.data);
       }
     } catch (error) {
-      // Check if it's a connection error
       const err = toError(error);
       const errorMessage = err.message;
-      if (errorMessage.includes('Could not establish connection') || 
+      if (errorMessage.includes('Could not establish connection') ||
           errorMessage.includes('Receiving end does not exist')) {
         logger.debug('Popup', 'Service worker not ready yet');
-        // Don't show error to user, just retry later
       } else {
         logger.error('Popup', 'Failed to load data', err);
       }
@@ -75,7 +64,7 @@ function Popup() {
     } catch (error) {
       const err = toError(error);
       const errorMessage = err.message;
-      if (errorMessage.includes('Could not establish connection') || 
+      if (errorMessage.includes('Could not establish connection') ||
           errorMessage.includes('Receiving end does not exist')) {
         logger.debug('Popup', 'Service worker not ready for toggle');
       } else {
@@ -157,7 +146,7 @@ function Popup() {
           <h2 className="text-sm font-semibold text-gray-700">Recent Activity</h2>
         </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           {data.alerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 px-6 text-center">
               <CheckCircle2 className="w-12 h-12 mb-3" />
@@ -165,14 +154,14 @@ function Popup() {
               <p className="text-xs mt-1">Browse the web to see protection in action</p>
             </div>
           ) : (
-            <List
-              listRef={setListRef}
-              defaultHeight={345}
-              rowCount={data.alerts.length}
-              rowHeight={dynamicRowHeight}
-              rowProps={{ alerts: data.alerts, expandedAlerts, toggleExpanded, dynamicRowHeight }}
-              rowComponent={AlertItemRenderer}
-            />
+            data.alerts.map((alert) => (
+              <AlertItem
+                key={alert.id}
+                alert={alert}
+                isExpanded={expandedAlerts.has(alert.id)}
+                onToggleExpanded={() => toggleExpanded(alert.id)}
+              />
+            ))
           )}
         </div>
       </div>
@@ -187,51 +176,17 @@ function Popup() {
   );
 }
 
-interface AlertItemData {
-  alerts: AlertType[];
-  expandedAlerts: Set<string>;
-  toggleExpanded: (alertId: string) => void;
-  dynamicRowHeight: ReturnType<typeof useDynamicRowHeight>;
-}
-
-function AlertItemRenderer({ index, ...props }: AlertItemData & { index: number }) {
-  const { alerts, expandedAlerts, toggleExpanded, dynamicRowHeight } = props;
-  const alert = alerts[index];
-  const isExpanded = expandedAlerts.has(alert.id);
-
-  return (
-    <AlertItem
-      alert={alert}
-      index={index}
-      isExpanded={isExpanded}
-      onToggleExpanded={() => toggleExpanded(alert.id)}
-      dynamicRowHeight={dynamicRowHeight}
-    />
-  );
-}
-
-function AlertItem({ 
-  alert, 
-  index,
-  isExpanded, 
-  onToggleExpanded,
-  dynamicRowHeight
-}: { 
-  alert: AlertType; 
-  index: number;
+function AlertItem({
+  alert,
+  isExpanded,
+  onToggleExpanded
+}: {
+  alert: AlertType;
   isExpanded: boolean;
   onToggleExpanded: () => void;
-  dynamicRowHeight: ReturnType<typeof useDynamicRowHeight>;
 }) {
   const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
-
-  // Use useCallback to prevent function recreation on every render
-  const handleElementRef = React.useCallback((element: HTMLDivElement | null) => {
-    if (element) {
-      dynamicRowHeight.observeRowElements([element]);
-    }
-  }, [dynamicRowHeight]); // Only recreate if dynamicRowHeight changes
 
   const getSeverityIcon = () => {
     switch (alert.severity) {
@@ -291,11 +246,7 @@ function AlertItem({
   const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
 
   return (
-    <div 
-      ref={handleElementRef}
-      data-index={index}
-      className="hover:bg-gray-50 transition-colors border-b border-gray-100"
-    >
+    <div className="hover:bg-gray-50 transition-colors border-b border-gray-100">
       <div className="px-6 py-3">
         <div className="flex items-start gap-3">
           <div className="mt-0.5">{getSeverityIcon()}</div>
