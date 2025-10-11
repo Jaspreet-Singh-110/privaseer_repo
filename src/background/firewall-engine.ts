@@ -102,7 +102,8 @@ export class FirewallEngine {
       await Storage.incrementTrackerBlock(domain, category, isHighRisk);
 
       // Use weighted scoring based on tracker risk level
-      await PrivacyScoreManager.handleTrackerBlocked(riskWeight);
+      // Pass domain to enable 24-hour cooldown tracking
+      await PrivacyScoreManager.handleTrackerBlocked(domain, riskWeight);
 
       tabManager.incrementBlockCount(tabId);
       await this.updateTabBadge(tabId);
