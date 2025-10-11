@@ -131,6 +131,21 @@ export class Storage {
         data.privacyScore.history = data.privacyScore.history.slice(0, 30);
       }
 
+      // Daily Recovery Mechanism: Reward clean browsing days
+      // If user had a good day (fewer than 10 trackers), give +1 recovery point
+      // This encourages long-term engagement and allows recovery from bad days
+      const hadCleanDay = data.privacyScore.daily.trackersBlocked < 10;
+      const hadVeryCleanDay = data.privacyScore.daily.trackersBlocked < 5;
+
+      if (hadVeryCleanDay) {
+        // Very clean day: +2 recovery points
+        data.privacyScore.current = Math.min(100, data.privacyScore.current + 2);
+      } else if (hadCleanDay) {
+        // Clean day: +1 recovery point
+        data.privacyScore.current = Math.min(100, data.privacyScore.current + 1);
+      }
+
+      // Reset daily counters
       data.privacyScore.daily = {
         trackersBlocked: 0,
         cleanSitesVisited: 0,
