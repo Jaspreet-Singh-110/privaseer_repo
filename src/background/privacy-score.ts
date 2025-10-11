@@ -18,11 +18,22 @@ export class PrivacyScoreManager {
   static async initialize(): Promise<void> {
     // Load persisted penalties from storage
     const data = await Storage.get();
+
+    logger.info('PrivacyScore', '🔄 INITIALIZING PrivacyScoreManager', {
+      hasPenalizedDomains: !!data.penalizedDomains,
+      penalizedDomainsType: typeof data.penalizedDomains,
+      penalizedDomainsKeys: data.penalizedDomains ? Object.keys(data.penalizedDomains).length : 0
+    });
+
     if (data.penalizedDomains) {
       this.penalizedDomains = new Map(Object.entries(data.penalizedDomains));
-      logger.info('PrivacyScore', `Loaded ${this.penalizedDomains.size} penalized domains from storage`);
+      logger.info('PrivacyScore', `✅ Loaded ${this.penalizedDomains.size} penalized domains from storage`, {
+        domains: Array.from(this.penalizedDomains.keys())
+      });
+    } else {
+      logger.warn('PrivacyScore', '⚠️ No penalizedDomains found in storage, starting fresh');
     }
-    
+
     if (!this.listenersSetup) {
       this.setupEventListeners();
       this.listenersSetup = true;
@@ -53,25 +64,40 @@ export class PrivacyScoreManager {
       const now = Date.now();
       const lastPenalty = this.penalizedDomains.get(domain);
 
+      logger.info('PrivacyScore', `Checking penalty for ${domain}`, {
+        domain,
+        hasPreviousPenalty: !!lastPenalty,
+        lastPenalty: lastPenalty ? new Date(lastPenalty).toISOString() : 'never',
+        mapSize: this.penalizedDomains.size,
+        cooldownMS: this.COOLDOWN_MS
+      });
+
       // Check if we penalized this domain recently (24 hours)
       if (lastPenalty && (now - lastPenalty) < this.COOLDOWN_MS) {
-        logger.debug('PrivacyScore', `Already penalized ${domain} today, skipping`, {
+        const cooldownRemaining = this.COOLDOWN_MS - (now - lastPenalty);
+        const hoursRemaining = Math.floor(cooldownRemaining / (60 * 60 * 1000));
+        logger.info('PrivacyScore', `🛑 COOLDOWN ACTIVE - Skipping penalty for ${domain}`, {
           domain,
-          lastPenalty,
-          cooldownRemaining: this.COOLDOWN_MS - (now - lastPenalty)
+          lastPenaltyDate: new Date(lastPenalty).toISOString(),
+          hoursRemaining,
+          currentScore: await this.getCurrentScore()
         });
         return await this.getCurrentScore();
       }
 
       // Apply penalty and remember
+      logger.info('PrivacyScore', `✅ APPLYING PENALTY to ${domain}`, {
+        domain,
+        riskWeight,
+        penalty: this.TRACKER_PENALTY * riskWeight,
+        timestamp: new Date(now).toISOString()
+      });
+
       this.penalizedDomains.set(domain, now);
       // Persist to storage so it survives service worker restarts
       await Storage.savePenalizedDomains(Object.fromEntries(this.penalizedDomains));
-      logger.info('PrivacyScore', `Penalizing ${domain}`, {
-        domain,
-        riskWeight,
-        penalty: this.TRACKER_PENALTY * riskWeight
-      });
+
+      logger.info('PrivacyScore', `💾 Saved ${this.penalizedDomains.size} penalized domains to storage`);
 
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
