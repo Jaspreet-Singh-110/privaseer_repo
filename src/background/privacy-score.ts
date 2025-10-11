@@ -52,8 +52,8 @@ export class PrivacyScoreManager {
     });
 
     // Listen to non-compliant site events
-    backgroundEvents.on('NON_COMPLIANT_SITE', async () => {
-      await this.handleNonCompliantSite();
+    backgroundEvents.on('NON_COMPLIANT_SITE', async (data) => {
+      await this.handleNonCompliantSite(data.domain);
     });
 
     logger.debug('PrivacyScore', 'Event listeners setup complete');
@@ -182,8 +182,44 @@ export class PrivacyScoreManager {
     }
   }
 
-  static async handleNonCompliantSite(): Promise<number> {
+  static async handleNonCompliantSite(domain: string): Promise<number> {
     try {
+      const now = Date.now();
+      const penaltyKey = `non-compliant:${domain}`;
+      const lastPenalty = this.penalizedDomains.get(penaltyKey);
+
+      logger.info('PrivacyScore', `Checking non-compliant penalty for ${domain}`, {
+        domain,
+        hasPreviousPenalty: !!lastPenalty,
+        lastPenalty: lastPenalty ? new Date(lastPenalty).toISOString() : 'never',
+        mapSize: this.penalizedDomains.size
+      });
+
+      // Check if we penalized this domain recently (24 hours)
+      if (lastPenalty && (now - lastPenalty) < this.COOLDOWN_MS) {
+        const cooldownRemaining = this.COOLDOWN_MS - (now - lastPenalty);
+        const hoursRemaining = Math.floor(cooldownRemaining / (60 * 60 * 1000));
+        logger.info('PrivacyScore', `🛑 COOLDOWN ACTIVE - Skipping non-compliant penalty for ${domain}`, {
+          domain,
+          lastPenaltyDate: new Date(lastPenalty).toISOString(),
+          hoursRemaining,
+          currentScore: await this.getCurrentScore()
+        });
+        return await this.getCurrentScore();
+      }
+
+      // Apply penalty and remember
+      logger.warn('PrivacyScore', `⚠️ APPLYING NON-COMPLIANT PENALTY to ${domain}`, {
+        domain,
+        penalty: this.NON_COMPLIANT_PENALTY,
+        timestamp: new Date(now).toISOString()
+      });
+
+      this.penalizedDomains.set(penaltyKey, now);
+      await Storage.savePenalizedDomains(Object.fromEntries(this.penalizedDomains));
+
+      logger.info('PrivacyScore', `💾 Saved ${this.penalizedDomains.size} penalized domains to storage`);
+
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
       const newScore = oldScore + this.NON_COMPLIANT_PENALTY;
