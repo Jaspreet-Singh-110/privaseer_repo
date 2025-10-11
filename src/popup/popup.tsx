@@ -1,10 +1,104 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import '../index.css';
+
+function PrivacyScoreMeter({ score }: { score: number }) {
+  const [animatedScore, setAnimatedScore] = useState(0);
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    let startTime: number;
+    const duration = 1500; // 1.5 seconds animation
+
+    const animate = (currentTime: number) => {
+      if (!startTime) startTime = currentTime;
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+      const currentScore = Math.floor(easeOutCubic * score);
+
+      setAnimatedScore(currentScore);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [score]);
+
+  const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
+  const scoreColorLight = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const radius = 80;
+  const strokeWidth = 12;
+  const normalizedRadius = radius - strokeWidth / 2;
+  const circumference = normalizedRadius * Math.PI; // Semi-circle circumference
+  const strokeDashoffset = circumference - (animatedScore / 100) * circumference;
+
+  return (
+    <div className="relative flex flex-col items-center">
+      <svg
+        height={radius + strokeWidth}
+        width={(radius + strokeWidth) * 2}
+        className="transform -rotate-90"
+      >
+        {/* Background arc */}
+        <path
+          d={`M ${strokeWidth / 2} ${radius + strokeWidth / 2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + strokeWidth / 2} ${radius + strokeWidth / 2}`}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+        {/* Animated score arc */}
+        <path
+          d={`M ${strokeWidth / 2} ${radius + strokeWidth / 2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + strokeWidth / 2} ${radius + strokeWidth / 2}`}
+          fill="none"
+          stroke={`url(#gradient-${score})`}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          style={{
+            transition: 'stroke-dashoffset 0.3s ease',
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+          }}
+        />
+        {/* Gradient definition */}
+        <defs>
+          <linearGradient id={`gradient-${score}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style={{ stopColor: scoreColor, stopOpacity: 0.8 }} />
+            <stop offset="100%" style={{ stopColor: scoreColorLight, stopOpacity: 1 }} />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Score display in center */}
+      <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -20%)' }}>
+        <div className="flex flex-col items-center">
+          <div className="flex items-baseline">
+            <span className="text-4xl font-bold" style={{ color: scoreColor }}>
+              {animatedScore}
+            </span>
+            <span className="text-lg font-medium text-gray-400 ml-1">/100</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Popup() {
   const [data, setData] = useState<StorageData | null>(null);
@@ -100,7 +194,7 @@ function Popup() {
 
   return (
     <div className="w-full h-[600px] flex flex-col bg-white">
-      <div className={`px-6 py-6 ${scoreBg} border-b border-gray-200`}>
+      <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
@@ -123,9 +217,8 @@ function Popup() {
           </button>
         </div>
 
-        <div className="flex items-center justify-center mb-2">
-          <div className={`text-5xl font-bold ${scoreColor}`}>{score}</div>
-          <div className="text-2xl font-medium text-gray-500 ml-1">/100</div>
+        <div className="flex items-center justify-center mb-3">
+          <PrivacyScoreMeter score={score} />
         </div>
 
         <div className="text-center mb-3">
