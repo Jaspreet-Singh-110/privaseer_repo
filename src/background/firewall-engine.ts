@@ -181,11 +181,18 @@ export class FirewallEngine {
       );
 
       if (!hasTrackers && currentTrackersCount === 0) {
-        // Check if we've already alerted about this domain recently (within 1 minute)
+        // Check if we've already alerted about this domain recently (within 5 minutes)
         const lastAlertTime = this.cleanSiteAlerts.get(domain);
         const now = Date.now();
 
-        if (!lastAlertTime || now - lastAlertTime > 60000) {
+        // Also check if there's already a recent alert in storage
+        const recentAlert = data.alerts.find(
+          a => a.domain === domain &&
+          a.message.includes('has no trackers') &&
+          now - a.timestamp < 300000 // 5 minutes
+        );
+
+        if ((!lastAlertTime || now - lastAlertTime > 300000) && !recentAlert) {
           this.cleanSiteAlerts.set(domain, now);
 
           // Emit clean site detected event
