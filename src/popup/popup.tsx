@@ -226,6 +226,13 @@ function AlertItem({
   const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
 
+  // Use useCallback to prevent function recreation on every render
+  const handleElementRef = React.useCallback((element: HTMLDivElement | null) => {
+    if (element) {
+      dynamicRowHeight.observeRowElements([element]);
+    }
+  }, [dynamicRowHeight]); // Only recreate if dynamicRowHeight changes
+
   const getSeverityIcon = () => {
     switch (alert.severity) {
       case 'high':
@@ -285,11 +292,7 @@ function AlertItem({
 
   return (
     <div 
-      ref={(element) => {
-        if (element) {
-          dynamicRowHeight.observeRowElements([element]);
-        }
-      }}
+      ref={handleElementRef}
       data-index={index}
       className="hover:bg-gray-50 transition-colors border-b border-gray-100"
     >

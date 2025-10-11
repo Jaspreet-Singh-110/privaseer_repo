@@ -15,7 +15,14 @@ export class PrivacyScoreManager {
   // Track penalized domains with timestamps (domain -> timestamp)
   private static penalizedDomains = new Map<string, number>();
 
-  static initialize(): void {
+  static async initialize(): Promise<void> {
+    // Load persisted penalties from storage
+    const data = await Storage.get();
+    if (data.penalizedDomains) {
+      this.penalizedDomains = new Map(Object.entries(data.penalizedDomains));
+      logger.info('PrivacyScore', `Loaded ${this.penalizedDomains.size} penalized domains from storage`);
+    }
+    
     if (!this.listenersSetup) {
       this.setupEventListeners();
       this.listenersSetup = true;
@@ -58,6 +65,8 @@ export class PrivacyScoreManager {
 
       // Apply penalty and remember
       this.penalizedDomains.set(domain, now);
+      // Persist to storage so it survives service worker restarts
+      await Storage.savePenalizedDomains(Object.fromEntries(this.penalizedDomains));
       logger.info('PrivacyScore', `Penalizing ${domain}`, {
         domain,
         riskWeight,

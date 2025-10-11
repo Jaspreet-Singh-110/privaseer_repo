@@ -48,6 +48,7 @@ export interface StorageData {
     showNotifications: boolean;
   };
   lastReset: number;
+  penalizedDomains?: Record<string, number>; // Persist penalty cooldowns across service worker restarts
 }
 
 export type MessageType =

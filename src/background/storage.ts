@@ -21,6 +21,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     showNotifications: true,
   },
   lastReset: Date.now(),
+  penalizedDomains: {}, // Initialize empty penalty tracking
 };
 
 export class Storage {
@@ -241,6 +242,12 @@ export class Storage {
 
       await this.save(data);
     }
+  }
+
+  static async savePenalizedDomains(domains: Record<string, number>): Promise<void> {
+    if (!this.cache) return;
+    this.cache.penalizedDomains = domains;
+    this.scheduleSave();
   }
 
   static async clear(): Promise<void> {

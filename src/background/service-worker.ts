@@ -21,7 +21,7 @@ async function initializeExtension(): Promise<void> {
     await tabManager.initialize();
 
     // Initialize event-driven components (sets up event listeners)
-    PrivacyScoreManager.initialize();
+    await PrivacyScoreManager.initialize();
 
     // Initialize core components
     await Storage.initialize();
@@ -92,33 +92,6 @@ function setupMessageHandlers(): void {
 
     return { success: true };
   });
-
-  // Keep fallback for direct chrome.runtime.sendMessage calls
-  chrome.runtime.onMessage.addListener((message: MessagePayload, sender, sendResponse) => {
-    handleMessage(message, sender).then(sendResponse).catch(error => {
-      const err = toError(error);
-      logger.error('ServiceWorker', 'Message handler error', err);
-      sendResponse({ error: err.message });
-    });
-    return true;
-  });
-}
-
-async function handleMessage(message: MessagePayload, sender: chrome.runtime.MessageSender): Promise<any> {
-  try {
-    // Check if extension is initialized
-    if (!isInitialized) {
-      logger.info('ServiceWorker', 'Extension not initialized yet, initializing...');
-      await initializeExtension();
-    }
-
-    // messageBus handlers will process the message
-    // This fallback is only for unknown message types
-    return { success: false, error: 'Unknown message type' };
-  } catch (error) {
-    logger.error('ServiceWorker', 'Error handling message', toError(error));
-    throw error;
-  }
 }
 
 function setupTabEventHandlers(): void {
@@ -196,3 +169,9 @@ chrome.runtime.onSuspend.addListener(async () => {
 });
 
 logger.info('ServiceWorker', 'Service worker loaded');
+
+// Initialize extension when service worker starts/wakes up
+// This ensures proper initialization even after suspension
+initializeExtension().catch(error => {
+  logger.error('ServiceWorker', 'Initial startup failed', toError(error));
+});
