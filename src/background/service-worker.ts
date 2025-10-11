@@ -5,6 +5,10 @@ import type { MessagePayload, ConsentScanResult } from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
 import { tabManager } from '../utils/tab-manager';
+import { backgroundEvents } from './event-emitter';
+import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
+import { sanitizeUrl } from '../utils/sanitizer';
+import { BADGE, TIME } from '../utils/constants';
 
 let isInitialized = false;
 
@@ -12,16 +16,18 @@ async function initializeExtension(): Promise<void> {
   try {
     logger.info('ServiceWorker', 'Initializing extension...');
 
-    // Initialize utilities first
-    await logger.initialize();
+    // Initialize utilities first (logger auto-initializes on first use)
     await messageBus.initialize();
     await tabManager.initialize();
+
+    // Initialize event-driven components (sets up event listeners)
+    PrivacyScoreManager.initialize();
 
     // Initialize core components
     await Storage.initialize();
     await FirewallEngine.initialize();
 
-    await chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
+    await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
 
     setupMessageHandlers();
     setupTabEventHandlers();
@@ -30,7 +36,7 @@ async function initializeExtension(): Promise<void> {
 
     logger.info('ServiceWorker', 'Extension initialized successfully');
   } catch (error) {
-    logger.error('ServiceWorker', 'Extension initialization failed', error as Error);
+    logger.error('ServiceWorker', 'Extension initialization failed', toError(error));
     throw error;
   }
 }
@@ -46,23 +52,30 @@ function setupMessageHandlers(): void {
     return { success: true, enabled };
   });
 
-  messageBus.on('GET_TRACKER_INFO', async (data: any) => {
-    const domain = data?.domain;
-    if (!domain) {
-      return { success: false, error: 'Domain not provided' };
+  messageBus.on('GET_TRACKER_INFO', async (data: unknown) => {
+    if (!isGetTrackerInfoData(data)) {
+      return { success: false, error: 'Invalid data: domain not provided' };
     }
-    const info = FirewallEngine.getTrackerInfo(domain);
+    const info = FirewallEngine.getTrackerInfo(data.domain);
     return { success: true, info };
   });
 
-  messageBus.on('CONSENT_SCAN_RESULT', async (data: any) => {
-    const result = data as ConsentScanResult;
+  messageBus.on('CONSENT_SCAN_RESULT', async (data: unknown) => {
+    if (!isConsentScanResult(data)) {
+      return { success: false, error: 'Invalid consent scan result data' };
+    }
+    const result = data;
 
     if (!result.isCompliant) {
-      await PrivacyScoreManager.handleNonCompliantSite();
-
       const urlObj = new URL(result.url);
       const domain = urlObj.hostname;
+
+      // Emit non-compliant site event
+      backgroundEvents.emit('NON_COMPLIANT_SITE', {
+        domain,
+        url: result.url,
+        deceptivePatterns: result.deceptivePatterns || [],
+      });
 
       await Storage.addAlert({
         id: `${Date.now()}-${Math.random()}`,
@@ -83,8 +96,9 @@ function setupMessageHandlers(): void {
   // Keep fallback for direct chrome.runtime.sendMessage calls
   chrome.runtime.onMessage.addListener((message: MessagePayload, sender, sendResponse) => {
     handleMessage(message, sender).then(sendResponse).catch(error => {
-      logger.error('ServiceWorker', 'Message handler error', error as Error);
-      sendResponse({ error: error.message });
+      const err = toError(error);
+      logger.error('ServiceWorker', 'Message handler error', err);
+      sendResponse({ error: err.message });
     });
     return true;
   });
@@ -98,56 +112,11 @@ async function handleMessage(message: MessagePayload, sender: chrome.runtime.Mes
       await initializeExtension();
     }
 
-    switch (message.type) {
-      case 'GET_STATE': {
-        const data = await Storage.get();
-        return { success: true, data };
-      }
-
-      case 'TOGGLE_PROTECTION': {
-        const enabled = await FirewallEngine.toggleProtection();
-        return { success: true, enabled };
-      }
-
-      case 'GET_TRACKER_INFO': {
-        const domain = message.data?.domain;
-        if (!domain) {
-          return { success: false, error: 'Domain not provided' };
-        }
-        const info = FirewallEngine.getTrackerInfo(domain);
-        return { success: true, info };
-      }
-
-      case 'CONSENT_SCAN_RESULT': {
-        const result = message.data as ConsentScanResult;
-
-        if (!result.isCompliant) {
-          await PrivacyScoreManager.handleNonCompliantSite();
-
-          const urlObj = new URL(result.url);
-          const domain = urlObj.hostname;
-
-          await Storage.addAlert({
-            id: `${Date.now()}-${Math.random()}`,
-            type: 'non_compliant_site',
-            severity: 'medium',
-            message: `${domain} has deceptive cookie banner`,
-            domain,
-            timestamp: Date.now(),
-            url: result.url,
-          });
-
-          messageBus.broadcast('STATE_UPDATE');
-        }
-
-        return { success: true };
-      }
-
-      default:
-        return { success: false, error: 'Unknown message type' };
-    }
+    // messageBus handlers will process the message
+    // This fallback is only for unknown message types
+    return { success: false, error: 'Unknown message type' };
   } catch (error) {
-    logger.error('ServiceWorker', 'Error handling message', error as Error);
+    logger.error('ServiceWorker', 'Error handling message', toError(error));
     throw error;
   }
 }
@@ -164,7 +133,7 @@ function setupTabEventHandlers(): void {
       try {
         await FirewallEngine.checkPageForTrackers(tabId, tab.url);
       } catch (error) {
-        logger.error('ServiceWorker', 'Error checking page', error as Error, { tabId, url: tab.url });
+        logger.error('ServiceWorker', 'Error checking page', toError(error), { tabId, url: sanitizeUrl(tab.url) });
       }
     }
   });
@@ -173,7 +142,15 @@ function setupTabEventHandlers(): void {
     try {
       await FirewallEngine.updateCurrentTabBadge(activeInfo.tabId);
     } catch (error) {
-      logger.error('ServiceWorker', 'Error updating badge', error as Error, { tabId: activeInfo.tabId });
+      logger.error('ServiceWorker', 'Error updating badge', toError(error), { tabId: activeInfo.tabId });
+    }
+  });
+
+  // Listen for tab removal to clean up badge timers immediately
+  messageBus.on('TAB_REMOVED', async (data: unknown) => {
+    const tabId = (data as { tabId: number })?.tabId;
+    if (typeof tabId === 'number') {
+      FirewallEngine.clearTabTimer(tabId);
     }
   });
 }
@@ -184,7 +161,7 @@ function setupCleanupInterval(): void {
     logger.debug('ServiceWorker', 'Running periodic cleanup');
     tabManager.cleanup();
     FirewallEngine.cleanup();
-  }, 60 * 60 * 1000);
+  }, TIME.ONE_HOUR_MS);
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -198,7 +175,7 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
-  logger.debug('ServiceWorker', 'Rule matched', { url: details.request.url, tabId: details.request.tabId });
+  logger.debug('ServiceWorker', 'Rule matched', { url: sanitizeUrl(details.request.url), tabId: details.request.tabId });
 
   if (details.request.tabId > 0) {
     await FirewallEngine.handleBlockedRequest(
@@ -210,6 +187,12 @@ chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
 
 chrome.action.onClicked.addListener(() => {
   logger.debug('ServiceWorker', 'Extension icon clicked');
+});
+
+chrome.runtime.onSuspend.addListener(async () => {
+  logger.info('ServiceWorker', 'Service worker suspending, flushing storage...');
+  await Storage.ensureSaved();
+  logger.info('ServiceWorker', 'Storage flushed before suspend');
 });
 
 logger.info('ServiceWorker', 'Service worker loaded');

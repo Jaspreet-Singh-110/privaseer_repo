@@ -61,15 +61,60 @@ export type MessageType =
   | 'TAB_UPDATED'
   | 'EXTENSION_READY';
 
-export interface Message<T = any> {
+// Message data types for type-safe messaging
+export interface GetTrackerInfoData {
+  domain: string;
+}
+
+export interface GetTrackerInfoResponse {
+  success: boolean;
+  info?: {
+    description: string;
+    alternative: string;
+  };
+  error?: string;
+}
+
+export interface GetStateResponse {
+  success: boolean;
+  data?: StorageData;
+  error?: string;
+}
+
+export interface ToggleProtectionResponse {
+  success: boolean;
+  enabled?: boolean;
+  error?: string;
+}
+
+export interface MessageResponse {
+  success: boolean;
+  error?: string;
+  [key: string]: unknown;
+}
+
+// Map of message types to their data types
+export interface MessageDataMap {
+  STATE_UPDATE: undefined;
+  GET_STATE: undefined;
+  TOGGLE_PROTECTION: undefined;
+  CONSENT_SCAN_RESULT: ConsentScanResult;
+  GET_TRACKER_INFO: GetTrackerInfoData;
+  TRACKER_BLOCKED: undefined;
+  TAB_ACTIVATED: undefined;
+  TAB_UPDATED: undefined;
+  EXTENSION_READY: undefined;
+}
+
+export interface Message<T = unknown> {
   type: MessageType;
   data?: T;
   requestId?: string;
   timestamp?: number;
 }
 
-export interface MessageHandler<T = any> {
-  (data: T, sender: chrome.runtime.MessageSender): Promise<any> | any;
+export interface MessageHandler<T = unknown> {
+  (data: T, sender: chrome.runtime.MessageSender): Promise<unknown> | unknown;
 }
 
 // Backward compatibility alias

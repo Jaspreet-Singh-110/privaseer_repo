@@ -4,8 +4,8 @@ import type { MessageType, Message, MessageHandler } from '../types';
 class MessageBus {
   private handlers = new Map<MessageType, MessageHandler[]>();
   private pendingRequests = new Map<string, {
-    resolve: (value: any) => void;
-    reject: (error: any) => void;
+    resolve: (value: unknown) => void;
+    reject: (error: Error) => void;
     timeout: number;
   }>();
   private initialized = false;
@@ -27,7 +27,7 @@ class MessageBus {
     logger.info('MessageBus', 'Message bus initialized');
   }
 
-  on<T = any>(type: MessageType, handler: MessageHandler<T>): void {
+  on<T = unknown>(type: MessageType, handler: MessageHandler<T>): void {
     if (!this.handlers.has(type)) {
       this.handlers.set(type, []);
     }
@@ -46,7 +46,7 @@ class MessageBus {
     }
   }
 
-  async send<T = any>(type: MessageType, data?: any, timeout = 5000): Promise<T> {
+  async send<T = unknown>(type: MessageType, data?: unknown, timeout = 5000): Promise<T> {
     const requestId = `${type}_${Date.now()}_${Math.random()}`;
     const message: Message = {
       type,
@@ -79,7 +79,7 @@ class MessageBus {
 
           if (chrome.runtime.lastError) {
             logger.error('MessageBus', 'Runtime error', chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
+            reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
           } else if (response?.success === false) {
             reject(new Error(response.error || 'Unknown error'));
           } else {
@@ -91,7 +91,7 @@ class MessageBus {
     });
   }
 
-  broadcast(type: MessageType, data?: any): void {
+  broadcast(type: MessageType, data?: unknown): void {
     const message: Message = {
       type,
       data,
@@ -118,7 +118,7 @@ class MessageBus {
   private async handleMessage(
     message: Message,
     sender: chrome.runtime.MessageSender
-  ): Promise<any> {
+  ): Promise<unknown> {
     logger.debug('MessageBus', `Handling message: ${message.type}`, {
       from: sender.tab?.id ? `tab ${sender.tab.id}` : 'extension',
     });

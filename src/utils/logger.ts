@@ -1,3 +1,6 @@
+import { sanitizeStackTrace } from './sanitizer';
+import { TIME } from './constants';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -5,7 +8,7 @@ interface LogEntry {
   level: LogLevel;
   category: string;
   message: string;
-  data?: any;
+  data?: unknown;
   error?: string;
   stack?: string;
 }
@@ -16,7 +19,7 @@ interface LogStorage {
 }
 
 const MAX_LOGS = 500;
-const MAX_LOG_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_LOG_AGE_MS = TIME.ONE_WEEK_MS;
 const STORAGE_KEY = 'privaseer_logs';
 
 class Logger {
@@ -24,17 +27,30 @@ class Logger {
   private logBuffer: LogEntry[] = [];
   private flushTimer: number | null = null;
   private initialized = false;
+  private initializing = false;
+  private initPromise: Promise<void> | null = null;
 
-  async initialize(): Promise<void> {
+  private async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
+    if (this.initializing && this.initPromise) return this.initPromise;
 
+    this.initializing = true;
+    this.initPromise = this.performInitialization();
+    await this.initPromise;
+  }
+
+  private async performInitialization(): Promise<void> {
     try {
       await this.loadLogs();
       await this.cleanup();
       this.initialized = true;
-      this.info('Logger', 'Logger initialized successfully');
+      console.log('[Logger] Auto-initialized successfully');
     } catch (error) {
-      console.error('[Logger] Failed to initialize:', error);
+      console.error('[Logger] Failed to auto-initialize:', error);
+      // Continue anyway - logger will work with in-memory buffer
+      this.initialized = true;
+    } finally {
+      this.initializing = false;
     }
   }
 
@@ -85,7 +101,7 @@ class Logger {
     level: LogLevel,
     category: string,
     message: string,
-    data?: any,
+    data?: unknown,
     error?: Error
   ): LogEntry {
     const entry: LogEntry = {
@@ -101,13 +117,18 @@ class Logger {
 
     if (error instanceof Error) {
       entry.error = error.message;
-      entry.stack = error.stack;
+      entry.stack = sanitizeStackTrace(error.stack);
     }
 
     return entry;
   }
 
   private writeLog(entry: LogEntry): void {
+    // Ensure initialization happens asynchronously (non-blocking)
+    this.ensureInitialized().catch(() => {
+      // Silent fail - logger will work with in-memory buffer
+    });
+
     this.logBuffer.push(entry);
 
     if (this.logBuffer.length > MAX_LOGS) {
@@ -132,33 +153,35 @@ class Logger {
         console.warn(prefix, entry.message, entry.data || '');
         break;
       case 'error':
-        console.error(prefix, entry.message, entry.error || '', entry.stack || '');
+        console.error(prefix, entry.message, entry.error || '', sanitizeStackTrace(entry.stack) || '');
         break;
     }
   }
 
-  debug(category: string, message: string, data?: any): void {
+  debug(category: string, message: string, data?: unknown): void {
     const entry = this.createLogEntry('debug', category, message, data);
     this.writeLog(entry);
   }
 
-  info(category: string, message: string, data?: any): void {
+  info(category: string, message: string, data?: unknown): void {
     const entry = this.createLogEntry('info', category, message, data);
     this.writeLog(entry);
   }
 
-  warn(category: string, message: string, data?: any): void {
+  warn(category: string, message: string, data?: unknown): void {
     const entry = this.createLogEntry('warn', category, message, data);
     this.writeLog(entry);
   }
 
-  error(category: string, message: string, error?: Error | unknown, data?: any): void {
+  error(category: string, message: string, error?: Error | unknown, data?: unknown): void {
     const errorObj = error instanceof Error ? error : undefined;
     const entry = this.createLogEntry('error', category, message, data, errorObj);
     this.writeLog(entry);
   }
 
   async getLogs(level?: LogLevel, category?: string, limit = 100): Promise<LogEntry[]> {
+    await this.ensureInitialized();
+    
     let logs = [...this.logBuffer];
 
     if (level) {
@@ -173,12 +196,14 @@ class Logger {
   }
 
   async clearLogs(): Promise<void> {
+    await this.ensureInitialized();
     this.logBuffer = [];
     await this.saveLogs();
     this.info('Logger', 'Logs cleared');
   }
 
   async exportLogs(): Promise<string> {
+    await this.ensureInitialized();
     return JSON.stringify({
       exportDate: new Date().toISOString(),
       version: '2.0.0',

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Privaseer",
-  "version": "1.0.0",
+  "version": "2.4.0",
   "description": "Privacy-first browser extension with real-time tracker blocking, privacy scoring, and consent scanning",
   "permissions": [
     "storage",

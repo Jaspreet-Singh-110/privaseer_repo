@@ -1,15 +1,45 @@
 import { Storage } from './storage';
 import { logger } from '../utils/logger';
+import { backgroundEvents } from './event-emitter';
+import { toError } from '../utils/type-guards';
+import { BADGE, TIME, PRIVACY_SCORE } from '../utils/constants';
 
 export class PrivacyScoreManager {
-  private static readonly TRACKER_PENALTY = -1;
-  private static readonly CLEAN_SITE_REWARD = 2;
-  private static readonly NON_COMPLIANT_PENALTY = -5;
-  private static readonly COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
-  private static readonly CLEANUP_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days
+  private static listenersSetup = false;
+  private static readonly TRACKER_PENALTY = PRIVACY_SCORE.TRACKER_PENALTY;
+  private static readonly CLEAN_SITE_REWARD = PRIVACY_SCORE.CLEAN_SITE_REWARD;
+  private static readonly NON_COMPLIANT_PENALTY = PRIVACY_SCORE.NON_COMPLIANT_PENALTY;
+  private static readonly COOLDOWN_MS = TIME.ONE_DAY_MS;
+  private static readonly CLEANUP_THRESHOLD = TIME.ONE_WEEK_MS;
 
   // Track penalized domains with timestamps (domain -> timestamp)
   private static penalizedDomains = new Map<string, number>();
+
+  static initialize(): void {
+    if (!this.listenersSetup) {
+      this.setupEventListeners();
+      this.listenersSetup = true;
+    }
+  }
+
+  private static setupEventListeners(): void {
+    // Listen to tracker blocked events
+    backgroundEvents.on('TRACKER_BLOCKED', async (data) => {
+      await this.handleTrackerBlocked(data.domain, data.riskWeight);
+    });
+
+    // Listen to clean site detected events
+    backgroundEvents.on('CLEAN_SITE_DETECTED', async () => {
+      await this.handleCleanSite();
+    });
+
+    // Listen to non-compliant site events
+    backgroundEvents.on('NON_COMPLIANT_SITE', async () => {
+      await this.handleNonCompliantSite();
+    });
+
+    logger.debug('PrivacyScore', 'Event listeners setup complete');
+  }
 
   static async handleTrackerBlocked(domain: string, riskWeight: number = 1): Promise<number> {
     try {
@@ -35,12 +65,17 @@ export class PrivacyScoreManager {
       });
 
       const data = await Storage.get();
+      const oldScore = data.privacyScore.current;
       // Apply risk-weighted penalty (e.g., fingerprinting = -5, analytics = -1)
       const penalty = this.TRACKER_PENALTY * riskWeight;
-      const newScore = data.privacyScore.current + penalty;
-      await Storage.updateScore(newScore);
+      const newScore = oldScore + penalty;
 
-      await this.updateBadge(data.privacyScore.daily.trackersBlocked);
+      // Emit score update event
+      backgroundEvents.emit('SCORE_UPDATED', {
+        oldScore,
+        newScore,
+        reason: `Tracker blocked: ${domain} (weight: ${riskWeight})`,
+      });
 
       logger.debug('PrivacyScore', 'Tracker blocked', { penalty, newScore, riskWeight });
 
@@ -51,7 +86,7 @@ export class PrivacyScoreManager {
 
       return newScore;
     } catch (error) {
-      logger.error('PrivacyScore', 'Error handling tracker block', error as Error);
+      logger.error('PrivacyScore', 'Error handling tracker block', toError(error));
       return 100;
     }
   }
@@ -92,14 +127,22 @@ export class PrivacyScoreManager {
   static async handleCleanSite(): Promise<number> {
     try {
       const data = await Storage.get();
-      const newScore = data.privacyScore.current + this.CLEAN_SITE_REWARD;
-      await Storage.updateScore(newScore);
+      const oldScore = data.privacyScore.current;
+      const newScore = oldScore + this.CLEAN_SITE_REWARD;
+
+      // Emit score update event
+      backgroundEvents.emit('SCORE_UPDATED', {
+        oldScore,
+        newScore,
+        reason: 'Clean site detected',
+      });
+
       await Storage.recordCleanSite();
 
       logger.debug('PrivacyScore', 'Clean site rewarded', { reward: this.CLEAN_SITE_REWARD, newScore });
       return newScore;
     } catch (error) {
-      logger.error('PrivacyScore', 'Error handling clean site', error as Error);
+      logger.error('PrivacyScore', 'Error handling clean site', toError(error));
       return 100;
     }
   }
@@ -107,14 +150,22 @@ export class PrivacyScoreManager {
   static async handleNonCompliantSite(): Promise<number> {
     try {
       const data = await Storage.get();
-      const newScore = data.privacyScore.current + this.NON_COMPLIANT_PENALTY;
-      await Storage.updateScore(newScore);
+      const oldScore = data.privacyScore.current;
+      const newScore = oldScore + this.NON_COMPLIANT_PENALTY;
+
+      // Emit score update event
+      backgroundEvents.emit('SCORE_UPDATED', {
+        oldScore,
+        newScore,
+        reason: 'Non-compliant cookie banner detected',
+      });
+
       await Storage.recordNonCompliantSite();
 
       logger.warn('PrivacyScore', 'Non-compliant site detected', { penalty: this.NON_COMPLIANT_PENALTY, newScore });
       return newScore;
     } catch (error) {
-      logger.error('PrivacyScore', 'Error handling non-compliant site', error as Error);
+      logger.error('PrivacyScore', 'Error handling non-compliant site', toError(error));
       return 100;
     }
   }
@@ -124,26 +175,15 @@ export class PrivacyScoreManager {
       const data = await Storage.get();
       return data.privacyScore.current;
     } catch (error) {
-      logger.error('PrivacyScore', 'Error getting current score', error as Error);
+      logger.error('PrivacyScore', 'Error getting current score', toError(error));
       return 100;
-    }
-  }
-
-  private static async updateBadge(trackersBlocked: number): Promise<void> {
-    try {
-      const badgeText = trackersBlocked > 0 ? trackersBlocked.toString() : '';
-
-      await chrome.action.setBadgeText({ text: badgeText });
-      await chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
-    } catch (error) {
-      logger.error('PrivacyScore', 'Error updating badge', error as Error);
     }
   }
 
   static getScoreColor(score: number): string {
     if (score >= 80) return '#10B981';
     if (score >= 60) return '#F59E0B';
-    return '#DC2626';
+    return BADGE.BACKGROUND_COLOR;
   }
 
   static getScoreLabel(score: number): string {

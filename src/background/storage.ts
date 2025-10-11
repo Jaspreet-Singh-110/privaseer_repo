@@ -1,5 +1,8 @@
 import type { StorageData, PrivacyScore, Alert, TrackerData } from '../types';
 import { logger } from '../utils/logger';
+import { backgroundEvents } from './event-emitter';
+import { toError } from '../utils/type-guards';
+import { TIME, DAILY_RECOVERY, STORAGE_RETRY } from '../utils/constants';
 
 const DEFAULT_STORAGE_DATA: StorageData = {
   privacyScore: {
@@ -22,6 +25,11 @@ const DEFAULT_STORAGE_DATA: StorageData = {
 
 export class Storage {
   private static cache: StorageData | null = null;
+  private static listenersSetup = false;
+  private static isDirty = false;
+  private static saveTimer: NodeJS.Timeout | null = null;
+  private static isSaving = false;
+  private static readonly SAVE_DELAY = 500; // ms
 
   static async initialize(): Promise<void> {
     try {
@@ -36,10 +44,30 @@ export class Storage {
         await this.checkDailyReset();
         logger.info('Storage', 'Loaded existing data');
       }
+
+      // Setup event listeners once
+      if (!this.listenersSetup) {
+        this.setupEventListeners();
+        this.listenersSetup = true;
+      }
     } catch (error) {
-      logger.error('Storage', 'Storage initialization failed', error as Error);
+      logger.error('Storage', 'Storage initialization failed', toError(error));
       this.cache = DEFAULT_STORAGE_DATA;
     }
+  }
+
+  private static setupEventListeners(): void {
+    // Listen to tracker blocked events
+    backgroundEvents.on('TRACKER_INCREMENT', async (data) => {
+      await this.incrementTrackerBlock(data.domain, data.category, data.isHighRisk);
+    });
+
+    // Listen to score updates
+    backgroundEvents.on('SCORE_UPDATED', async (data) => {
+      await this.updateScore(data.newScore);
+    });
+
+    logger.debug('Storage', 'Event listeners setup complete');
   }
 
   static async get(): Promise<StorageData> {
@@ -50,19 +78,74 @@ export class Storage {
   }
 
   static async save(data: StorageData): Promise<void> {
+    await this.saveWithRetry(data);
+  }
+
+  private static async saveWithRetry(data: StorageData, attempt: number = 1): Promise<void> {
     try {
       await chrome.storage.local.set({ privacyData: data });
       this.cache = data;
-      logger.debug('Storage', 'Data saved successfully');
+      
+      if (attempt > 1) {
+        logger.info('Storage', `Data saved successfully after ${attempt} attempts`);
+      } else {
+        logger.debug('Storage', 'Data saved successfully');
+      }
     } catch (error) {
-      logger.error('Storage', 'Storage save failed', error as Error);
-      throw error;
+      const err = toError(error);
+      
+      if (attempt < STORAGE_RETRY.MAX_ATTEMPTS) {
+        const delay = STORAGE_RETRY.INITIAL_DELAY_MS * Math.pow(STORAGE_RETRY.BACKOFF_MULTIPLIER, attempt - 1);
+        logger.warn('Storage', `Storage save failed (attempt ${attempt}/${STORAGE_RETRY.MAX_ATTEMPTS}), retrying in ${delay}ms`, err);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.saveWithRetry(data, attempt + 1);
+      } else {
+        logger.error('Storage', `Storage save failed after ${STORAGE_RETRY.MAX_ATTEMPTS} attempts`, err);
+        throw error;
+      }
     }
+  }
+
+  private static scheduleSave(): void {
+    this.isDirty = true;
+    
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+    }
+    
+    this.saveTimer = setTimeout(() => this.flushToDisk(), this.SAVE_DELAY);
+  }
+
+  private static async flushToDisk(): Promise<void> {
+    if (!this.isDirty || this.isSaving || !this.cache) return;
+    
+    this.isSaving = true;
+    this.isDirty = false;
+    
+    try {
+      await this.saveWithRetry(this.cache);
+      logger.debug('Storage', 'Data flushed to disk');
+    } catch (error) {
+      logger.error('Storage', 'Storage flush failed', toError(error));
+      this.isDirty = true; // Retry on next operation
+    } finally {
+      this.isSaving = false;
+    }
+  }
+
+  static async ensureSaved(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.flushToDisk();
   }
 
   static async updateScore(newScore: number): Promise<void> {
     const data = await this.get();
     data.privacyScore.current = Math.max(0, Math.min(100, newScore));
+    // Critical operation: save immediately to prevent data loss
     await this.save(data);
   }
 
@@ -74,7 +157,7 @@ export class Storage {
       data.alerts = data.alerts.slice(0, 100);
     }
 
-    await this.save(data);
+    this.scheduleSave();
   }
 
   static async incrementTrackerBlock(domain: string, category: string, isHighRisk: boolean): Promise<void> {
@@ -94,19 +177,19 @@ export class Storage {
     data.trackers[domain].lastBlocked = Date.now();
     data.privacyScore.daily.trackersBlocked++;
 
-    await this.save(data);
+    this.scheduleSave();
   }
 
   static async recordCleanSite(): Promise<void> {
     const data = await this.get();
     data.privacyScore.daily.cleanSitesVisited++;
-    await this.save(data);
+    this.scheduleSave();
   }
 
   static async recordNonCompliantSite(): Promise<void> {
     const data = await this.get();
     data.privacyScore.daily.nonCompliantSites++;
-    await this.save(data);
+    this.scheduleSave();
   }
 
   static async toggleProtection(): Promise<boolean> {
@@ -120,9 +203,8 @@ export class Storage {
     const data = await this.get();
     const now = Date.now();
     const lastReset = data.lastReset;
-    const oneDayMs = 24 * 60 * 60 * 1000;
 
-    if (now - lastReset >= oneDayMs) {
+    if (now - lastReset >= TIME.ONE_DAY_MS) {
       const historyEntry = {
         date: new Date(lastReset).toISOString().split('T')[0],
         score: data.privacyScore.current,
@@ -136,17 +218,17 @@ export class Storage {
       }
 
       // Daily Recovery Mechanism: Reward clean browsing days
-      // If user had a good day (fewer than 10 trackers), give +1 recovery point
+      // If user had a good day (fewer than threshold trackers), give recovery points
       // This encourages long-term engagement and allows recovery from bad days
-      const hadCleanDay = data.privacyScore.daily.trackersBlocked < 10;
-      const hadVeryCleanDay = data.privacyScore.daily.trackersBlocked < 5;
+      const hadCleanDay = data.privacyScore.daily.trackersBlocked < DAILY_RECOVERY.CLEAN_DAY_THRESHOLD;
+      const hadVeryCleanDay = data.privacyScore.daily.trackersBlocked < DAILY_RECOVERY.VERY_CLEAN_DAY_THRESHOLD;
 
       if (hadVeryCleanDay) {
-        // Very clean day: +2 recovery points
-        data.privacyScore.current = Math.min(100, data.privacyScore.current + 2);
+        // Very clean day: reward points
+        data.privacyScore.current = Math.min(100, data.privacyScore.current + DAILY_RECOVERY.VERY_CLEAN_DAY_REWARD);
       } else if (hadCleanDay) {
-        // Clean day: +1 recovery point
-        data.privacyScore.current = Math.min(100, data.privacyScore.current + 1);
+        // Clean day: reward points
+        data.privacyScore.current = Math.min(100, data.privacyScore.current + DAILY_RECOVERY.CLEAN_DAY_REWARD);
       }
 
       // Reset daily counters
