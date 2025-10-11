@@ -1,5 +1,7 @@
 import { logger } from './logger';
 import { messageBus } from './message-bus';
+import { sanitizeUrl } from './sanitizer';
+import { TIME } from './constants';
 
 interface TabInfo {
   id: number;
@@ -43,7 +45,7 @@ class TabManager {
         if (tab.id) {
           this.tabs.set(tab.id, {
             id: tab.id,
-            url: tab.url,
+            url: sanitizeUrl(tab.url),
             title: tab.title,
             active: tab.active,
             blockCount: 0,
@@ -66,11 +68,11 @@ class TabManager {
   private handleTabCreated(tab: chrome.tabs.Tab): void {
     if (!tab.id) return;
 
-    logger.debug('TabManager', `Tab created: ${tab.id}`, { url: tab.url });
+    logger.debug('TabManager', `Tab created: ${tab.id}`, { url: sanitizeUrl(tab.url) });
 
     this.tabs.set(tab.id, {
       id: tab.id,
-      url: tab.url,
+      url: sanitizeUrl(tab.url),
       title: tab.title,
       active: tab.active,
       blockCount: 0,
@@ -97,7 +99,7 @@ class TabManager {
 
     if (existingTab) {
       Object.assign(existingTab, {
-        url: tab.url || existingTab.url,
+        url: sanitizeUrl(tab.url) || existingTab.url,
         title: tab.title || existingTab.title,
         status: tab.status as 'loading' | 'complete' || existingTab.status,
         lastUpdate: Date.now(),
@@ -105,7 +107,7 @@ class TabManager {
     } else {
       this.tabs.set(tabId, {
         id: tabId,
-        url: tab.url,
+        url: sanitizeUrl(tab.url),
         title: tab.title,
         active: tab.active,
         blockCount: 0,
@@ -153,6 +155,9 @@ class TabManager {
     if (this.activeTabId === tabId) {
       this.activeTabId = null;
     }
+
+    // Notify other components about tab removal for cleanup
+    messageBus.broadcast('TAB_REMOVED', { tabId });
   }
 
   getTab(tabId: number): TabInfo | undefined {
@@ -205,7 +210,7 @@ class TabManager {
   }
 
   cleanup(): void {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - TIME.ONE_DAY_MS;
     let removed = 0;
 
     for (const [tabId, tab] of this.tabs.entries()) {

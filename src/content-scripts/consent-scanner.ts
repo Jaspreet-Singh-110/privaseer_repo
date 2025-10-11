@@ -1,5 +1,8 @@
 import type { ConsentScanResult, PrivacyRules } from '../types';
 import { logger } from '../utils/logger';
+import { toError } from '../utils/type-guards';
+import { sanitizeUrl } from '../utils/sanitizer';
+import { SCANNER, CONSENT_BANNER } from '../utils/constants';
 
 class ConsentScanner {
   private rules: PrivacyRules | null = null;
@@ -7,18 +10,16 @@ class ConsentScanner {
 
   async initialize(): Promise<void> {
     try {
-      await logger.initialize();
-      
       const response = await fetch(chrome.runtime.getURL('data/privacy-rules.json'));
       this.rules = await response.json();
 
-      this.scanTimeout = setTimeout(() => this.scanPage(), 2000);
+      this.scanTimeout = setTimeout(() => this.scanPage(), SCANNER.INITIAL_SCAN_DELAY_MS);
 
       const observer = new MutationObserver(() => {
         if (this.scanTimeout) {
           clearTimeout(this.scanTimeout);
         }
-        this.scanTimeout = setTimeout(() => this.scanPage(), 500);
+        this.scanTimeout = setTimeout(() => this.scanPage(), SCANNER.MUTATION_DEBOUNCE_MS);
       });
 
       observer.observe(document.body, {
@@ -26,9 +27,9 @@ class ConsentScanner {
         subtree: true,
       });
       
-      logger.debug('ConsentScanner', 'Initialized successfully', { url: window.location.href });
+      logger.debug('ConsentScanner', 'Initialized successfully', { url: sanitizeUrl(window.location.href) });
     } catch (error) {
-      logger.error('ConsentScanner', 'Failed to initialize consent scanner', error as Error);
+      logger.error('ConsentScanner', 'Failed to initialize consent scanner', toError(error));
     }
   }
 
@@ -47,7 +48,7 @@ class ConsentScanner {
       const deceptivePatterns = this.detectDeceptivePatterns(banner, hasRejectButton);
 
       const result: ConsentScanResult = {
-        url: window.location.href,
+        url: sanitizeUrl(window.location.href) || '',
         hasBanner: true,
         hasRejectButton,
         isCompliant,
@@ -63,7 +64,7 @@ class ConsentScanner {
         
         if (!result.isCompliant) {
           logger.warn('ConsentScanner', 'Non-compliant cookie banner detected', {
-            url: window.location.href,
+            url: sanitizeUrl(window.location.href),
             hasRejectButton: result.hasRejectButton,
             deceptivePatterns: result.deceptivePatterns
           });
@@ -73,7 +74,7 @@ class ConsentScanner {
         logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
       }
     } catch (error) {
-      logger.error('ConsentScanner', 'Error scanning page', error as Error);
+      logger.error('ConsentScanner', 'Error scanning page', toError(error));
     }
   }
 
@@ -96,7 +97,7 @@ class ConsentScanner {
       const text = element.textContent?.toLowerCase() || '';
       if (
         (text.includes('cookie') || text.includes('privacy') || text.includes('consent')) &&
-        text.length < 2000 &&
+        text.length < CONSENT_BANNER.MAX_TEXT_LENGTH &&
         this.isVisible(element)
       ) {
         return element;
@@ -145,7 +146,7 @@ class ConsentScanner {
       const acceptArea = acceptRect.width * acceptRect.height;
       const rejectArea = rejectRect.width * rejectRect.height;
 
-      if (acceptArea > rejectArea * 1.5) {
+      if (acceptArea > rejectArea * CONSENT_BANNER.BUTTON_SIZE_PROMINENCE_THRESHOLD) {
         return false;
       }
     }
@@ -171,7 +172,7 @@ class ConsentScanner {
       const acceptStyle = window.getComputedStyle(acceptButton);
       const rejectStyle = window.getComputedStyle(rejectButton);
 
-      if (parseFloat(acceptStyle.fontSize) > parseFloat(rejectStyle.fontSize) * 1.2) {
+      if (parseFloat(acceptStyle.fontSize) > parseFloat(rejectStyle.fontSize) * CONSENT_BANNER.FONT_SIZE_PROMINENCE_THRESHOLD) {
         patterns.push('Dark Pattern');
       }
 

@@ -1,15 +1,20 @@
 import type { Alert, TrackerLists } from '../types';
 import { Storage } from './storage';
-import { PrivacyScoreManager } from './privacy-score';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
 import { tabManager } from '../utils/tab-manager';
+import { backgroundEvents } from './event-emitter';
+import { toError } from '../utils/type-guards';
+import { sanitizeUrl } from '../utils/sanitizer';
+import { BADGE } from '../utils/constants';
 
 const RULESET_ID = 'tracker_blocklist';
+const BADGE_UPDATE_DEBOUNCE_MS = 300;
 
 export class FirewallEngine {
   private static trackerLists: TrackerLists | null = null;
   private static isInitialized = false;
+  private static badgeUpdateTimers = new Map<number, NodeJS.Timeout>();
 
   private static readonly RISK_WEIGHTS = {
     'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
@@ -40,7 +45,7 @@ export class FirewallEngine {
       const domainCount = this.getAllTrackerDomains().length;
       logger.info('FirewallEngine', 'Firewall engine initialized', { trackerDomains: domainCount });
     } catch (error) {
-      logger.error('FirewallEngine', 'Failed to initialize firewall engine', error as Error);
+      logger.error('FirewallEngine', 'Failed to initialize firewall engine', toError(error));
       throw error;
     }
   }
@@ -99,14 +104,25 @@ export class FirewallEngine {
       const isHighRisk = this.isHighRisk(domain);
       const riskWeight = this.getRiskWeight(domain, category);
 
-      await Storage.incrementTrackerBlock(domain, category, isHighRisk);
+      // Emit event for Storage to increment tracker count
+      backgroundEvents.emit('TRACKER_INCREMENT', {
+        domain,
+        category,
+        isHighRisk,
+      });
 
-      // Use weighted scoring based on tracker risk level
-      // Pass domain to enable 24-hour cooldown tracking
-      await PrivacyScoreManager.handleTrackerBlocked(domain, riskWeight);
+      // Emit event for PrivacyScoreManager to handle scoring
+      backgroundEvents.emit('TRACKER_BLOCKED', {
+        domain,
+        category,
+        isHighRisk,
+        riskWeight,
+        tabId,
+        url,
+      });
 
       tabManager.incrementBlockCount(tabId);
-      await this.updateTabBadge(tabId);
+      this.scheduleTabBadgeUpdate(tabId);
 
       const tab = await chrome.tabs.get(tabId);
       const siteDomain = tab.url ? new URL(tab.url).hostname : 'unknown';
@@ -132,7 +148,7 @@ export class FirewallEngine {
         message: `Blocked ${domain}${riskWeight > 1 ? ` (${category}, risk: ${riskWeight}x)` : ''}`,
         domain: siteDomain,
         timestamp: Date.now(),
-        url: tab.url,
+        url: sanitizeUrl(tab.url),
       };
 
       await Storage.addAlert(alert);
@@ -147,7 +163,7 @@ export class FirewallEngine {
 
       this.notifyPopup();
     } catch (error) {
-      logger.error('FirewallEngine', 'Error handling blocked request', error as Error, { url, tabId });
+      logger.error('FirewallEngine', 'Error handling blocked request', toError(error), { url: sanitizeUrl(url), tabId });
     }
   }
 
@@ -164,7 +180,12 @@ export class FirewallEngine {
       );
 
       if (!hasTrackers && currentTrackersCount === 0) {
-        await PrivacyScoreManager.handleCleanSite();
+        // Emit clean site detected event
+        backgroundEvents.emit('CLEAN_SITE_DETECTED', {
+          domain,
+          tabId,
+          url,
+        });
 
         const alert: Alert = {
           id: `${Date.now()}-${Math.random()}`,
@@ -173,7 +194,7 @@ export class FirewallEngine {
           message: `${domain} has no trackers`,
           domain,
           timestamp: Date.now(),
-          url,
+          url: sanitizeUrl(url),
         };
 
         await Storage.addAlert(alert);
@@ -181,7 +202,7 @@ export class FirewallEngine {
         this.notifyPopup();
       }
     } catch (error) {
-      logger.error('FirewallEngine', 'Error checking page for trackers', error as Error, { tabId, url });
+      logger.error('FirewallEngine', 'Error checking page for trackers', toError(error), { tabId, url: sanitizeUrl(url) });
     }
   }
 
@@ -194,9 +215,16 @@ export class FirewallEngine {
 
     if (enabled) {
       await this.enableBlocking();
+      // Update badge for current active tab
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]?.id) {
+        await this.updateCurrentTabBadge(tabs[0].id);
+      }
       logger.info('FirewallEngine', 'Protection enabled');
     } else {
       await this.disableBlocking();
+      // Clear all badges when protection is disabled
+      await chrome.action.setBadgeText({ text: '' });
       logger.info('FirewallEngine', 'Protection paused');
     }
 
@@ -210,7 +238,7 @@ export class FirewallEngine {
       });
       logger.info('FirewallEngine', 'Blocking rules enabled');
     } catch (error) {
-      logger.error('FirewallEngine', 'Failed to enable blocking', error as Error);
+      logger.error('FirewallEngine', 'Failed to enable blocking', toError(error));
     }
   }
 
@@ -221,29 +249,63 @@ export class FirewallEngine {
       });
       logger.info('FirewallEngine', 'Blocking rules disabled');
     } catch (error) {
-      logger.error('FirewallEngine', 'Failed to disable blocking', error as Error);
+      logger.error('FirewallEngine', 'Failed to disable blocking', toError(error));
     }
   }
 
-  private static async updateTabBadge(tabId: number): Promise<void> {
+  private static async updateTabBadgeImmediate(tabId: number): Promise<void> {
     try {
       const count = tabManager.getBlockCount(tabId);
       const badgeText = count > 0 ? count.toString() : '';
 
       await chrome.action.setBadgeText({ text: badgeText, tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#DC2626', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR, tabId });
     } catch (error) {
-      logger.error('FirewallEngine', 'Error updating tab badge', error as Error, { tabId });
+      logger.error('FirewallEngine', 'Error updating tab badge', toError(error), { tabId });
     }
   }
 
+  private static scheduleTabBadgeUpdate(tabId: number): void {
+    // Clear any existing timer for this tab
+    const existingTimer = this.badgeUpdateTimers.get(tabId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Schedule a new update after the debounce delay
+    const timer = setTimeout(() => {
+      this.updateTabBadgeImmediate(tabId);
+      this.badgeUpdateTimers.delete(tabId);
+    }, BADGE_UPDATE_DEBOUNCE_MS);
+
+    this.badgeUpdateTimers.set(tabId, timer);
+  }
+
   static async updateCurrentTabBadge(tabId: number): Promise<void> {
-    await this.updateTabBadge(tabId);
+    await this.updateTabBadgeImmediate(tabId);
+  }
+
+  static clearTabTimer(tabId: number): void {
+    const timer = this.badgeUpdateTimers.get(tabId);
+    if (timer) {
+      clearTimeout(timer);
+      this.badgeUpdateTimers.delete(tabId);
+      logger.debug('FirewallEngine', 'Cleared badge timer for closed tab', { tabId });
+    }
   }
 
   static cleanup(): void {
     logger.debug('FirewallEngine', 'Running cleanup');
-    // Cleanup is now handled by tabManager, but we can add any engine-specific cleanup here
+    
+    // Clear all pending badge update timers to prevent memory leaks
+    for (const timer of this.badgeUpdateTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.badgeUpdateTimers.clear();
+    
+    logger.debug('FirewallEngine', 'Cleared badge update timers', { 
+      timersCleared: this.badgeUpdateTimers.size 
+    });
   }
 
   static getTrackerInfo(domain: string): { description: string; alternative: string } | null {
