@@ -17,7 +17,7 @@ function PrivacyScoreMeter({ score }: { score: number }) {
   const strokeWidth = 12;
   const normalizedRadius = radius - strokeWidth / 2;
   // Semi-circle arc length - increase to account for rounded caps filling to 100%
-  const circumference = normalizedRadius * Math.PI * 1.05;
+  const circumference = normalizedRadius * Math.PI * 1.10;
 
   useEffect(() => {
     // Set initial state immediately
