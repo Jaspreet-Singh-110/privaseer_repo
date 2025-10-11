@@ -15,6 +15,7 @@ export class FirewallEngine {
   private static trackerLists: TrackerLists | null = null;
   private static isInitialized = false;
   private static badgeUpdateTimers = new Map<number, NodeJS.Timeout>();
+  private static cleanSiteAlerts = new Map<string, number>(); // Track clean site alerts by domain
 
   private static readonly RISK_WEIGHTS = {
     'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
@@ -180,26 +181,34 @@ export class FirewallEngine {
       );
 
       if (!hasTrackers && currentTrackersCount === 0) {
-        // Emit clean site detected event
-        backgroundEvents.emit('CLEAN_SITE_DETECTED', {
-          domain,
-          tabId,
-          url,
-        });
+        // Check if we've already alerted about this domain recently (within 1 minute)
+        const lastAlertTime = this.cleanSiteAlerts.get(domain);
+        const now = Date.now();
 
-        const alert: Alert = {
-          id: `${Date.now()}-${Math.random()}`,
-          type: 'tracker_blocked',
-          severity: 'low',
-          message: `${domain} has no trackers`,
-          domain,
-          timestamp: Date.now(),
-          url: sanitizeUrl(url),
-        };
+        if (!lastAlertTime || now - lastAlertTime > 60000) {
+          this.cleanSiteAlerts.set(domain, now);
 
-        await Storage.addAlert(alert);
-        logger.debug('FirewallEngine', 'Clean site detected', { domain, tabId });
-        this.notifyPopup();
+          // Emit clean site detected event
+          backgroundEvents.emit('CLEAN_SITE_DETECTED', {
+            domain,
+            tabId,
+            url,
+          });
+
+          const alert: Alert = {
+            id: `${Date.now()}-${Math.random()}`,
+            type: 'tracker_blocked',
+            severity: 'low',
+            message: `${domain} has no trackers`,
+            domain,
+            timestamp: Date.now(),
+            url: sanitizeUrl(url),
+          };
+
+          await Storage.addAlert(alert);
+          logger.debug('FirewallEngine', 'Clean site detected', { domain, tabId });
+          this.notifyPopup();
+        }
       }
     } catch (error) {
       logger.error('FirewallEngine', 'Error checking page for trackers', toError(error), { tabId, url: sanitizeUrl(url) });
