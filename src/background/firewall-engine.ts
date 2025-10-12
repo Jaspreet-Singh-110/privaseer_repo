@@ -185,6 +185,11 @@ export class FirewallEngine {
 
   static async checkPageForTrackers(tabId: number, url: string): Promise<void> {
     try {
+      // Only check actual websites, not browser pages
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return;
+      }
+
       const data = await Storage.get();
       const currentTrackersCount = data.privacyScore.daily.trackersBlocked;
 
@@ -196,7 +201,7 @@ export class FirewallEngine {
       );
 
       if (!hasTrackers && currentTrackersCount === 0) {
-        // Check if we've already alerted about this domain recently (within 5 minutes)
+        // Check if we've already alerted about this domain recently (within 24 hours)
         const lastAlertTime = this.cleanSiteAlerts.get(domain);
         const now = Date.now();
 
@@ -204,10 +209,10 @@ export class FirewallEngine {
         const recentAlert = data.alerts.find(
           a => a.domain === domain &&
           a.message.includes('has no trackers') &&
-          now - a.timestamp < 300000 // 5 minutes
+          now - a.timestamp < 86400000 // 24 hours
         );
 
-        if ((!lastAlertTime || now - lastAlertTime > 300000) && !recentAlert) {
+        if ((!lastAlertTime || now - lastAlertTime > 86400000) && !recentAlert) {
           this.cleanSiteAlerts.set(domain, now);
 
           // Emit clean site detected event

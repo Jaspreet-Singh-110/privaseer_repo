@@ -226,6 +226,13 @@ export class Storage {
     return data.settings.protectionEnabled;
   }
 
+  static async clearAlerts(): Promise<void> {
+    const data = await this.get();
+    data.alerts = [];
+    await this.save(data);
+    logger.info('Storage', 'Cleared all alerts');
+  }
+
   private static async checkDailyReset(): Promise<void> {
     const data = await this.get();
     const now = Date.now();

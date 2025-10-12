@@ -379,8 +379,23 @@ function Popup() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="px-6 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Recent Activity</h2>
+          {data.alerts.length > 0 && (
+            <button
+              onClick={async () => {
+                try {
+                  await chrome.runtime.sendMessage({ type: 'CLEAR_ALERTS' });
+                  await loadData();
+                } catch (error) {
+                  logger.error('Popup', 'Failed to clear alerts', toError(error));
+                }
+              }}
+              className="text-xs text-gray-500 hover:text-red-600 font-medium transition-colors"
+            >
+              Clear All
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">

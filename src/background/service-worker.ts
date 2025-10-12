@@ -53,6 +53,11 @@ function setupMessageHandlers(): void {
     return { success: true, enabled };
   });
 
+  messageBus.on('CLEAR_ALERTS', async () => {
+    await Storage.clearAlerts();
+    return { success: true };
+  });
+
   messageBus.on('GET_TRACKER_INFO', async (data: unknown) => {
     if (!isGetTrackerInfoData(data)) {
       return { success: false, error: 'Invalid data: domain not provided' };
