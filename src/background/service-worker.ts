@@ -75,6 +75,11 @@ function setupMessageHandlers(): void {
       const lastAlertTime = consentAlertCache.get(domain);
       const now = Date.now();
 
+      // If we've alerted within 5 minutes, skip
+      if (lastAlertTime && now - lastAlertTime < 300000) {
+        return { success: true };
+      }
+
       // Also check if there's already a recent alert in storage
       const data = await Storage.get();
       const recentAlert = data.alerts.find(
@@ -83,28 +88,33 @@ function setupMessageHandlers(): void {
         now - a.timestamp < 300000 // 5 minutes
       );
 
-      if ((!lastAlertTime || now - lastAlertTime > 300000) && !recentAlert) {
+      if (recentAlert) {
+        // Update cache to prevent future checks
         consentAlertCache.set(domain, now);
-
-        // Emit non-compliant site event
-        backgroundEvents.emit('NON_COMPLIANT_SITE', {
-          domain,
-          url: result.url,
-          deceptivePatterns: result.deceptivePatterns || [],
-        });
-
-        await Storage.addAlert({
-          id: `${Date.now()}-${Math.random()}`,
-          type: 'non_compliant_site',
-          severity: 'medium',
-          message: `${domain} has deceptive cookie banner`,
-          domain,
-          timestamp: Date.now(),
-          url: result.url,
-        });
-
-        messageBus.broadcast('STATE_UPDATE');
+        return { success: true };
       }
+
+      // Set cache BEFORE creating alert to prevent race conditions
+      consentAlertCache.set(domain, now);
+
+      // Emit non-compliant site event
+      backgroundEvents.emit('NON_COMPLIANT_SITE', {
+        domain,
+        url: result.url,
+        deceptivePatterns: result.deceptivePatterns || [],
+      });
+
+      await Storage.addAlert({
+        id: `${Date.now()}-${Math.random()}`,
+        type: 'non_compliant_site',
+        severity: 'medium',
+        message: `${domain} has deceptive cookie banner`,
+        domain,
+        timestamp: Date.now(),
+        url: result.url,
+      });
+
+      messageBus.broadcast('STATE_UPDATE');
     }
 
     return { success: true };
