@@ -31,11 +31,7 @@ class TabManager {
     chrome.tabs.onRemoved.addListener((tabId) => this.handleTabRemoved(tabId));
 
     await this.syncExistingTabs();
-
     this.initialized = true;
-    logger.info('TabManager', 'Tab manager initialized', {
-      tabCount: this.tabs.size,
-    });
   }
 
   private async syncExistingTabs(): Promise<void> {
@@ -59,7 +55,6 @@ class TabManager {
         }
       }
 
-      logger.info('TabManager', `Synced ${tabs.length} existing tabs`);
     } catch (error) {
       logger.error('TabManager', 'Failed to sync existing tabs', error);
     }
@@ -67,8 +62,6 @@ class TabManager {
 
   private handleTabCreated(tab: chrome.tabs.Tab): void {
     if (!tab.id) return;
-
-    logger.debug('TabManager', `Tab created: ${tab.id}`, { url: sanitizeUrl(tab.url) });
 
     this.tabs.set(tab.id, {
       id: tab.id,
@@ -86,8 +79,6 @@ class TabManager {
     changeInfo: chrome.tabs.TabChangeInfo,
     tab: chrome.tabs.Tab
   ): void {
-    logger.debug('TabManager', `Tab updated: ${tabId}`, changeInfo);
-
     const existingTab = this.tabs.get(tabId);
 
     if (changeInfo.status === 'loading') {
@@ -124,8 +115,6 @@ class TabManager {
   }
 
   private handleTabActivated(activeInfo: chrome.tabs.ActiveInfo): void {
-    logger.debug('TabManager', `Tab activated: ${activeInfo.tabId}`);
-
     if (this.activeTabId !== null) {
       const previousTab = this.tabs.get(this.activeTabId);
       if (previousTab) {
@@ -148,8 +137,6 @@ class TabManager {
   }
 
   private handleTabRemoved(tabId: number): void {
-    logger.debug('TabManager', `Tab removed: ${tabId}`);
-
     this.tabs.delete(tabId);
 
     if (this.activeTabId === tabId) {
@@ -177,9 +164,6 @@ class TabManager {
     if (tab) {
       tab.blockCount++;
       tab.lastUpdate = Date.now();
-      logger.debug('TabManager', `Block count incremented for tab ${tabId}`, {
-        count: tab.blockCount,
-      });
     }
   }
 
@@ -188,7 +172,6 @@ class TabManager {
     if (tab) {
       tab.blockCount = 0;
       tab.lastUpdate = Date.now();
-      logger.debug('TabManager', `Block count reset for tab ${tabId}`);
     }
   }
 
@@ -218,10 +201,6 @@ class TabManager {
         this.tabs.delete(tabId);
         removed++;
       }
-    }
-
-    if (removed > 0) {
-      logger.info('TabManager', `Cleaned up ${removed} stale tabs`);
     }
   }
 }

@@ -24,7 +24,6 @@ class MessageBus {
     });
 
     this.initialized = true;
-    logger.info('MessageBus', 'Message bus initialized');
   }
 
   on<T = unknown>(type: MessageType, handler: MessageHandler<T>): void {
@@ -32,7 +31,6 @@ class MessageBus {
       this.handlers.set(type, []);
     }
     this.handlers.get(type)!.push(handler);
-    logger.debug('MessageBus', `Handler registered for ${type}`);
   }
 
   off(type: MessageType, handler: MessageHandler): void {
@@ -41,7 +39,6 @@ class MessageBus {
       const index = handlers.indexOf(handler);
       if (index > -1) {
         handlers.splice(index, 1);
-        logger.debug('MessageBus', `Handler unregistered for ${type}`);
       }
     }
   }
@@ -54,8 +51,6 @@ class MessageBus {
       requestId,
       timestamp: Date.now(),
     };
-
-    logger.debug('MessageBus', `Sending message: ${type}`, { requestId, data });
 
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -83,7 +78,6 @@ class MessageBus {
           } else if (response?.success === false) {
             reject(new Error(response.error || 'Unknown error'));
           } else {
-            logger.debug('MessageBus', `Received response for ${type}`, { requestId });
             resolve(response);
           }
         }
@@ -98,10 +92,8 @@ class MessageBus {
       timestamp: Date.now(),
     };
 
-    logger.debug('MessageBus', `Broadcasting: ${type}`, data);
-
-    chrome.runtime.sendMessage(message).catch(error => {
-      logger.debug('MessageBus', 'Broadcast failed (popup may be closed)', error);
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Popup may be closed, ignore
     });
 
     chrome.tabs.query({}, tabs => {
@@ -119,10 +111,6 @@ class MessageBus {
     message: Message,
     sender: chrome.runtime.MessageSender
   ): Promise<unknown> {
-    logger.debug('MessageBus', `Handling message: ${message.type}`, {
-      from: sender.tab?.id ? `tab ${sender.tab.id}` : 'extension',
-    });
-
     const handlers = this.handlers.get(message.type);
     if (!handlers || handlers.length === 0) {
       logger.warn('MessageBus', `No handler for message type: ${message.type}`);
@@ -150,7 +138,6 @@ class MessageBus {
       reject(new Error('Request cleared'));
     });
     this.pendingRequests.clear();
-    logger.info('MessageBus', 'Cleared all pending requests');
   }
 }
 

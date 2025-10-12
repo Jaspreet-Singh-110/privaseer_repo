@@ -39,11 +39,9 @@ export class Storage {
       if (!data.privacyData) {
         await this.save(DEFAULT_STORAGE_DATA);
         this.cache = DEFAULT_STORAGE_DATA;
-        logger.info('Storage', 'Initialized with default data');
       } else {
         this.cache = data.privacyData;
         await this.checkDailyReset();
-        logger.info('Storage', 'Loaded existing data');
       }
 
       // Setup event listeners once
@@ -67,8 +65,6 @@ export class Storage {
     backgroundEvents.on('SCORE_UPDATED', async (data) => {
       await this.updateScore(data.newScore);
     });
-
-    logger.debug('Storage', 'Event listeners setup complete');
   }
 
   static async get(): Promise<StorageData> {
@@ -96,7 +92,6 @@ export class Storage {
       const data = await this.get();
       data.penalizedDomains = penalizedDomains;
       await this.save(data);
-      logger.debug('Storage', `Saved ${Object.keys(penalizedDomains).length} penalized domains`);
     } catch (error) {
       logger.error('Storage', 'Failed to save penalized domains', toError(error));
       throw error;
@@ -107,12 +102,6 @@ export class Storage {
     try {
       await chrome.storage.local.set({ privacyData: data });
       this.cache = data;
-      
-      if (attempt > 1) {
-        logger.info('Storage', `Data saved successfully after ${attempt} attempts`);
-      } else {
-        logger.debug('Storage', 'Data saved successfully');
-      }
     } catch (error) {
       const err = toError(error);
       
@@ -147,7 +136,6 @@ export class Storage {
     
     try {
       await this.saveWithRetry(this.cache);
-      logger.debug('Storage', 'Data flushed to disk');
     } catch (error) {
       logger.error('Storage', 'Storage flush failed', toError(error));
       this.isDirty = true; // Retry on next operation
@@ -183,7 +171,6 @@ export class Storage {
     );
 
     if (isDuplicate) {
-      logger.debug('Storage', 'Skipping duplicate alert', { domain: alert.domain, type: alert.type });
       return;
     }
 
@@ -230,13 +217,8 @@ export class Storage {
 
   static async toggleProtection(): Promise<boolean> {
     const data = await this.get();
-    const oldState = data.settings.protectionEnabled;
     data.settings.protectionEnabled = !data.settings.protectionEnabled;
     await this.save(data);
-    logger.info('Storage', 'Toggled protection', {
-      oldState,
-      newState: data.settings.protectionEnabled
-    });
     return data.settings.protectionEnabled;
   }
 
@@ -244,7 +226,6 @@ export class Storage {
     const data = await this.get();
     data.alerts = [];
     await this.save(data);
-    logger.info('Storage', 'Cleared all alerts');
   }
 
   private static async checkDailyReset(): Promise<void> {

@@ -44,8 +44,7 @@ export class FirewallEngine {
         await this.disableBlocking();
       }
 
-      const domainCount = this.getAllTrackerDomains().length;
-      logger.info('FirewallEngine', 'Firewall engine initialized', { trackerDomains: domainCount });
+      // Successfully initialized
     } catch (error) {
       logger.error('FirewallEngine', 'Failed to initialize firewall engine', toError(error));
       throw error;
@@ -162,21 +161,7 @@ export class FirewallEngine {
         };
 
         await Storage.addAlert(alert);
-
-        logger.debug('FirewallEngine', 'Blocked tracker', {
-          tracker: domain,
-          category,
-          riskWeight,
-          tabId,
-          site: siteDomain
-        });
-
         this.notifyPopup();
-      } else {
-        logger.debug('FirewallEngine', 'Skipped duplicate alert', {
-          tracker: domain,
-          site: siteDomain
-        });
       }
     } catch (error) {
       logger.error('FirewallEngine', 'Error handling blocked request', toError(error), { url: sanitizeUrl(url), tabId });
@@ -233,7 +218,6 @@ export class FirewallEngine {
           };
 
           await Storage.addAlert(alert);
-          logger.debug('FirewallEngine', 'Clean site detected', { domain, tabId });
           this.notifyPopup();
         }
       }
@@ -248,7 +232,6 @@ export class FirewallEngine {
 
   static async toggleProtection(): Promise<boolean> {
     const enabled = await Storage.toggleProtection();
-    logger.info('FirewallEngine', 'Toggle result from Storage', { enabled });
 
     if (enabled) {
       await this.enableBlocking();
@@ -257,12 +240,10 @@ export class FirewallEngine {
       if (tabs[0]?.id) {
         await this.updateCurrentTabBadge(tabs[0].id);
       }
-      logger.info('FirewallEngine', 'Protection enabled');
     } else {
       await this.disableBlocking();
       // Clear all badges when protection is disabled
       await chrome.action.setBadgeText({ text: '' });
-      logger.info('FirewallEngine', 'Protection paused');
     }
 
     return enabled;
@@ -273,7 +254,6 @@ export class FirewallEngine {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         enableRulesetIds: [RULESET_ID],
       });
-      logger.info('FirewallEngine', 'Blocking rules enabled');
     } catch (error) {
       logger.error('FirewallEngine', 'Failed to enable blocking', toError(error));
     }
@@ -284,7 +264,6 @@ export class FirewallEngine {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         disableRulesetIds: [RULESET_ID],
       });
-      logger.info('FirewallEngine', 'Blocking rules disabled');
     } catch (error) {
       logger.error('FirewallEngine', 'Failed to disable blocking', toError(error));
     }
@@ -327,22 +306,15 @@ export class FirewallEngine {
     if (timer) {
       clearTimeout(timer);
       this.badgeUpdateTimers.delete(tabId);
-      logger.debug('FirewallEngine', 'Cleared badge timer for closed tab', { tabId });
     }
   }
 
   static cleanup(): void {
-    logger.debug('FirewallEngine', 'Running cleanup');
-    
     // Clear all pending badge update timers to prevent memory leaks
     for (const timer of this.badgeUpdateTimers.values()) {
       clearTimeout(timer);
     }
     this.badgeUpdateTimers.clear();
-    
-    logger.debug('FirewallEngine', 'Cleared badge update timers', { 
-      timersCleared: this.badgeUpdateTimers.size 
-    });
   }
 
   static getTrackerInfo(domain: string): { description: string; alternative: string } | null {

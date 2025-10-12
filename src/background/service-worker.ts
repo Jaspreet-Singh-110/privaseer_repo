@@ -17,20 +17,17 @@ const consentAlertCache = new Map<string, number>(); // Track consent alerts by 
 async function initializeExtension(): Promise<void> {
   // If already initialized, skip
   if (isInitialized) {
-    logger.debug('ServiceWorker', 'Already initialized, skipping');
     return;
   }
 
   // If initialization is in progress, wait for it
   if (initializationPromise) {
-    logger.debug('ServiceWorker', 'Initialization in progress, waiting...');
     return initializationPromise;
   }
 
   // Start initialization
   initializationPromise = (async () => {
     try {
-      logger.info('ServiceWorker', 'Initializing extension...');
 
       // Initialize utilities first (logger auto-initializes on first use)
       await messageBus.initialize();
@@ -49,8 +46,6 @@ async function initializeExtension(): Promise<void> {
       setupTabEventHandlers();
       setupCleanupInterval();
       isInitialized = true;
-
-      logger.info('ServiceWorker', 'Extension initialized successfully');
     } catch (error) {
       logger.error('ServiceWorker', 'Extension initialization failed', toError(error));
       initializationPromise = null; // Reset on error so retry is possible
@@ -69,7 +64,6 @@ function setupMessageHandlers(): void {
 
   messageBus.on('TOGGLE_PROTECTION', async () => {
     const enabled = await FirewallEngine.toggleProtection();
-    logger.debug('ServiceWorker', 'Toggle protection result', { enabled });
     return { success: true, enabled };
   });
 
@@ -184,25 +178,20 @@ function setupTabEventHandlers(): void {
 function setupCleanupInterval(): void {
   // Run cleanup every hour
   setInterval(() => {
-    logger.debug('ServiceWorker', 'Running periodic cleanup');
     tabManager.cleanup();
     FirewallEngine.cleanup();
   }, TIME.ONE_HOUR_MS);
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  logger.info('ServiceWorker', 'Extension installed');
   await initializeExtension();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  logger.info('ServiceWorker', 'Browser started');
   await initializeExtension();
 });
 
 chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
-  logger.debug('ServiceWorker', 'Rule matched', { url: sanitizeUrl(details.request.url), tabId: details.request.tabId });
-
   if (details.request.tabId > 0) {
     await FirewallEngine.handleBlockedRequest(
       details.request.url,
@@ -212,16 +201,12 @@ chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (details) => {
 });
 
 chrome.action.onClicked.addListener(() => {
-  logger.debug('ServiceWorker', 'Extension icon clicked');
+  // Extension icon clicked - popup will open automatically
 });
 
 chrome.runtime.onSuspend.addListener(async () => {
-  logger.info('ServiceWorker', 'Service worker suspending, flushing storage...');
   await Storage.ensureSaved();
-  logger.info('ServiceWorker', 'Storage flushed before suspend');
 });
-
-logger.info('ServiceWorker', 'Service worker loaded');
 
 // Initialize extension when service worker starts/wakes up
 // This ensures proper initialization even after suspension
