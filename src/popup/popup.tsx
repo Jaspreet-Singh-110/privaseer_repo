@@ -122,6 +122,7 @@ function Popup() {
   const [currentTab, setCurrentTab] = useState<chrome.tabs.Tab | null>(null);
   const [showProtectionToast, setShowProtectionToast] = useState(false);
   const [protectionToastMessage, setProtectionToastMessage] = useState('');
+  const [protectionToastState, setProtectionToastState] = useState(false);
   const [isTogglingProtection, setIsTogglingProtection] = useState(false);
 
   useEffect(() => {
@@ -192,17 +193,16 @@ function Popup() {
       clearTimeout(timeout);
 
       if (response && response.success) {
+        const newState = response.enabled;
+
         await loadData();
 
-        const message = response.enabled
-          ? 'Protection Enabled - Trackers are now being blocked'
-          : 'Protection Paused - Trackers are not being blocked';
-
-        setProtectionToastMessage(message);
+        setProtectionToastState(newState);
+        setProtectionToastMessage(newState ? 'Protection Enabled' : 'Protection Paused');
         setShowProtectionToast(true);
         setTimeout(() => setShowProtectionToast(false), 3000);
 
-        logger.info('Popup', 'Protection toggled', { enabled: response.enabled });
+        logger.info('Popup', 'Protection toggled', { enabled: newState });
       }
     } catch (error) {
       clearTimeout(timeout);
@@ -517,18 +517,16 @@ function Popup() {
 
       {showProtectionToast && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
-          <div className={`${data?.settings.protectionEnabled ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-500 to-gray-600'} text-white px-6 py-3 rounded-lg shadow-2xl flex items-center gap-3`}>
-            {data?.settings.protectionEnabled ? (
+          <div className={`${protectionToastState ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-500 to-gray-600'} text-white px-6 py-3 rounded-lg shadow-2xl flex items-center gap-3`}>
+            {protectionToastState ? (
               <Shield className="w-5 h-5" />
             ) : (
               <ShieldOff className="w-5 h-5" />
             )}
             <div>
-              <p className="font-semibold text-sm">
-                {data?.settings.protectionEnabled ? 'Protection Enabled' : 'Protection Paused'}
-              </p>
-              <p className="text-xs text-blue-100">
-                {data?.settings.protectionEnabled ? 'Trackers are now being blocked' : 'Trackers are not being blocked'}
+              <p className="font-semibold text-sm">{protectionToastMessage}</p>
+              <p className="text-xs opacity-90">
+                {protectionToastState ? 'Trackers are now being blocked' : 'Trackers are not being blocked'}
               </p>
             </div>
           </div>
