@@ -230,8 +230,13 @@ export class Storage {
 
   static async toggleProtection(): Promise<boolean> {
     const data = await this.get();
+    const oldState = data.settings.protectionEnabled;
     data.settings.protectionEnabled = !data.settings.protectionEnabled;
     await this.save(data);
+    logger.info('Storage', 'Toggled protection', {
+      oldState,
+      newState: data.settings.protectionEnabled
+    });
     return data.settings.protectionEnabled;
   }
 

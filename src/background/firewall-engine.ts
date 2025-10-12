@@ -248,6 +248,7 @@ export class FirewallEngine {
 
   static async toggleProtection(): Promise<boolean> {
     const enabled = await Storage.toggleProtection();
+    logger.info('FirewallEngine', 'Toggle result from Storage', { enabled });
 
     if (enabled) {
       await this.enableBlocking();
