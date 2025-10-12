@@ -164,6 +164,20 @@ export class Storage {
 
   static async addAlert(alert: Alert): Promise<void> {
     const data = await this.get();
+
+    const isDuplicate = data.alerts.some(
+      existing =>
+        existing.domain === alert.domain &&
+        existing.type === alert.type &&
+        existing.message === alert.message &&
+        Math.abs(existing.timestamp - alert.timestamp) < 60000
+    );
+
+    if (isDuplicate) {
+      logger.debug('Storage', 'Skipping duplicate alert', { domain: alert.domain, type: alert.type });
+      return;
+    }
+
     data.alerts.unshift(alert);
 
     if (data.alerts.length > 100) {

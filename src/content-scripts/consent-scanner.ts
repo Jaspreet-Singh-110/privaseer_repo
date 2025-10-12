@@ -7,6 +7,8 @@ import { SCANNER, CONSENT_BANNER } from '../utils/constants';
 class ConsentScanner {
   private rules: PrivacyRules | null = null;
   private scanTimeout: NodeJS.Timeout | null = null;
+  private hasScanned: boolean = false;
+  private scannedBanners: Set<string> = new Set();
 
   async initialize(): Promise<void> {
     try {
@@ -43,6 +45,15 @@ class ConsentScanner {
         return;
       }
 
+      const bannerText = banner.textContent?.substring(0, 100) || '';
+      const bannerIdentifier = `${window.location.hostname}-${bannerText}`;
+
+      if (this.scannedBanners.has(bannerIdentifier)) {
+        return;
+      }
+
+      this.scannedBanners.add(bannerIdentifier);
+
       const hasRejectButton = this.findRejectButton(banner);
       const isCompliant = this.checkCompliance(banner, hasRejectButton);
       const deceptivePatterns = this.detectDeceptivePatterns(banner, hasRejectButton);
@@ -61,7 +72,7 @@ class ConsentScanner {
           type: 'CONSENT_SCAN_RESULT',
           data: result,
         });
-        
+
         if (!result.isCompliant) {
           logger.warn('ConsentScanner', 'Non-compliant cookie banner detected', {
             url: sanitizeUrl(window.location.href),
@@ -70,7 +81,6 @@ class ConsentScanner {
           });
         }
       } catch (error) {
-        // Service worker might not be ready yet, ignore the error
         logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
       }
     } catch (error) {
