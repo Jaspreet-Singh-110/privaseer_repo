@@ -11,40 +11,54 @@ import { sanitizeUrl } from '../utils/sanitizer';
 import { BADGE, TIME } from '../utils/constants';
 
 let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
 
 async function initializeExtension(): Promise<void> {
+  // If already initialized, skip
   if (isInitialized) {
     logger.debug('ServiceWorker', 'Already initialized, skipping');
     return;
   }
 
-  try {
-    logger.info('ServiceWorker', 'Initializing extension...');
-
-    // Initialize utilities first (logger auto-initializes on first use)
-    await messageBus.initialize();
-    await tabManager.initialize();
-
-    // Initialize event-driven components (sets up event listeners)
-    await PrivacyScoreManager.initialize();
-
-    // Initialize core components
-    await Storage.initialize();
-    await FirewallEngine.initialize();
-
-    await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
-
-    setupMessageHandlers();
-    setupTabEventHandlers();
-    setupCleanupInterval();
-    isInitialized = true;
-
-    logger.info('ServiceWorker', 'Extension initialized successfully');
-  } catch (error) {
-    logger.error('ServiceWorker', 'Extension initialization failed', toError(error));
-    throw error;
+  // If initialization is in progress, wait for it
+  if (initializationPromise) {
+    logger.debug('ServiceWorker', 'Initialization in progress, waiting...');
+    return initializationPromise;
   }
+
+  // Start initialization
+  initializationPromise = (async () => {
+    try {
+      logger.info('ServiceWorker', 'Initializing extension...');
+
+      // Initialize utilities first (logger auto-initializes on first use)
+      await messageBus.initialize();
+      await tabManager.initialize();
+
+      // Initialize event-driven components (sets up event listeners)
+      await PrivacyScoreManager.initialize();
+
+      // Initialize core components
+      await Storage.initialize();
+      await FirewallEngine.initialize();
+
+      await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
+
+      setupMessageHandlers();
+      setupTabEventHandlers();
+      setupCleanupInterval();
+      isInitialized = true;
+
+      logger.info('ServiceWorker', 'Extension initialized successfully');
+    } catch (error) {
+      logger.error('ServiceWorker', 'Extension initialization failed', toError(error));
+      initializationPromise = null; // Reset on error so retry is possible
+      throw error;
+    }
+  })();
+
+  return initializationPromise;
 }
 
 function setupMessageHandlers(): void {
