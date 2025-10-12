@@ -235,12 +235,31 @@ function Popup() {
     });
   };
 
-  const handleFeedbackSubmit = () => {
-    console.log('User Feedback Submitted:', feedbackText);
-    setShowFeedbackModal(false);
-    setFeedbackText('');
-    setShowSuccessBanner(true);
-    setTimeout(() => setShowSuccessBanner(false), 3000);
+  const handleFeedbackSubmit = async () => {
+    try {
+      const timestamp = new Date().toISOString();
+      const feedbackEntry = {
+        text: feedbackText,
+        timestamp,
+        url: currentTab?.url || 'unknown',
+        domain: data?.domain || 'unknown'
+      };
+
+      const result = await chrome.storage.local.get('userFeedback');
+      const existingFeedback = result.userFeedback || [];
+      existingFeedback.push(feedbackEntry);
+
+      await chrome.storage.local.set({ userFeedback: existingFeedback });
+
+      logger.info('User feedback stored', { timestamp, domain: feedbackEntry.domain });
+
+      setShowFeedbackModal(false);
+      setFeedbackText('');
+      setShowSuccessBanner(true);
+      setTimeout(() => setShowSuccessBanner(false), 3000);
+    } catch (error) {
+      logger.error('Failed to store feedback', toError(error));
+    }
   };
 
   if (loading || !data) {
@@ -567,8 +586,9 @@ function AlertItem({
     switch (alert.type) {
       case 'high_risk':
         return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      case 'non_compliant_site':
-        return <XCircle className="w-4 h-4 text-amber-600" />;
+      // DISABLED: Consent scanning feature
+      // case 'non_compliant_site':
+      //   return <XCircle className="w-4 h-4 text-amber-600" />;
       default:
         return <Shield className="w-4 h-4 text-blue-600" />;
     }
@@ -610,14 +630,17 @@ function AlertItem({
   const handleAlertClick = () => {
     if (isTrackerAlert) {
       loadTrackerInfo();
-    } else if (isCookieBannerAlert) {
-      onToggleExpanded();
     }
+    // DISABLED: Consent scanning feature
+    // else if (isCookieBannerAlert) {
+    //   onToggleExpanded();
+    // }
   };
 
   const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
-  const isCookieBannerAlert = alert.type === 'non_compliant_site';
-  const hasExpandableInfo = isTrackerAlert || (isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0);
+  // DISABLED: Consent scanning feature
+  // const isCookieBannerAlert = alert.type === 'non_compliant_site';
+  const hasExpandableInfo = isTrackerAlert; // || (isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0);
 
   return (
     <div className="hover:bg-gray-50 transition-colors border-b border-gray-100">
@@ -671,6 +694,8 @@ function AlertItem({
         </div>
       )}
 
+      {/* DISABLED: Consent scanning feature - Cookie banner alert details */}
+      {/*
       {isExpanded && isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0 && (
         <div className="px-6 pb-3">
           <div className="ml-5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
@@ -698,6 +723,7 @@ function AlertItem({
           </div>
         </div>
       )}
+      */}
     </div>
   );
 }
