@@ -78,6 +78,15 @@ export class Storage {
     return this.cache!;
   }
 
+  static async getFresh(): Promise<StorageData> {
+    const data = await chrome.storage.local.get('privacyData');
+    if (data.privacyData) {
+      this.cache = data.privacyData;
+      return data.privacyData;
+    }
+    return await this.get();
+  }
+
   static async save(data: StorageData): Promise<void> {
     await this.saveWithRetry(data);
   }

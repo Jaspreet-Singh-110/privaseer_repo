@@ -44,12 +44,13 @@ async function initializeExtension(): Promise<void> {
 
 function setupMessageHandlers(): void {
   messageBus.on('GET_STATE', async () => {
-    const data = await Storage.get();
+    const data = await Storage.getFresh();
     return { success: true, data };
   });
 
   messageBus.on('TOGGLE_PROTECTION', async () => {
     const enabled = await FirewallEngine.toggleProtection();
+    logger.debug('ServiceWorker', 'Toggle protection result', { enabled });
     return { success: true, enabled };
   });
 

@@ -192,8 +192,11 @@ function Popup() {
       const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_PROTECTION' });
       clearTimeout(timeout);
 
+      console.log('Toggle response:', response);
+
       if (response && response.success) {
         const newState = response.enabled;
+        console.log('New protection state:', newState);
 
         await loadData();
 
@@ -206,6 +209,7 @@ function Popup() {
       }
     } catch (error) {
       clearTimeout(timeout);
+      console.error('Toggle error:', error);
       const err = toError(error);
       const errorMessage = err.message;
       if (errorMessage.includes('Could not establish connection') ||
