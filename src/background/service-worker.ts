@@ -112,6 +112,7 @@ function setupMessageHandlers(): void {
         domain,
         timestamp: Date.now(),
         url: result.url,
+        deceptivePatterns: result.deceptivePatterns || [],
       });
 
       messageBus.broadcast('STATE_UPDATE');

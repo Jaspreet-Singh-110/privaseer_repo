@@ -348,7 +348,17 @@ function AlertItem({
     }
   };
 
+  const handleAlertClick = () => {
+    if (isTrackerAlert) {
+      loadTrackerInfo();
+    } else if (isCookieBannerAlert) {
+      onToggleExpanded();
+    }
+  };
+
   const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
+  const isCookieBannerAlert = alert.type === 'non_compliant_site';
+  const hasExpandableInfo = isTrackerAlert || (isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0);
 
   return (
     <div className="hover:bg-gray-50 transition-colors border-b border-gray-100">
@@ -359,11 +369,11 @@ function AlertItem({
             <div className="flex items-center gap-2 mb-1">
               {getTypeIcon()}
               <span className="text-xs font-medium text-gray-900 truncate">{alert.message}</span>
-              {isTrackerAlert && (
+              {hasExpandableInfo && (
                 <button
-                  onClick={loadTrackerInfo}
+                  onClick={handleAlertClick}
                   className="ml-auto p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                  title="Show tracker info"
+                  title={isTrackerAlert ? "Show tracker info" : "Show banner details"}
                   disabled={loadingInfo}
                 >
                   {loadingInfo ? (
@@ -382,7 +392,7 @@ function AlertItem({
         </div>
       </div>
 
-      {isExpanded && trackerInfo && (
+      {isExpanded && trackerInfo && isTrackerAlert && (
         <div className="px-6 pb-3">
           <div className="ml-5 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
             <div className="mb-2">
@@ -393,6 +403,34 @@ function AlertItem({
               <span className="font-semibold text-blue-900">Alternative: </span>
               <span className="text-blue-800">{trackerInfo.alternative}</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isExpanded && isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0 && (
+        <div className="px-6 pb-3">
+          <div className="ml-5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+            <div className="mb-2">
+              <span className="font-semibold text-amber-900">Banner Issues:</span>
+            </div>
+            <ul className="space-y-1 text-amber-800">
+              {alert.deceptivePatterns.map((pattern, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span>
+                    {pattern === 'Forced Consent' && 'No reject button available - you must accept tracking'}
+                    {pattern === 'Dark Pattern' && 'Accept button is more prominent than reject button'}
+                    {pattern === 'Hidden Reject' && 'Reject button is hidden below the fold'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {alert.url && (
+              <div className="mt-2 pt-2 border-t border-amber-200">
+                <span className="font-semibold text-amber-900">URL: </span>
+                <span className="text-amber-800 break-all">{alert.url}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

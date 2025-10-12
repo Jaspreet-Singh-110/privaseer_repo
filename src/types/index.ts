@@ -6,6 +6,7 @@ export interface Alert {
   domain: string;
   timestamp: number;
   url?: string;
+  deceptivePatterns?: string[];
 }
 
 export interface PrivacyScore {
