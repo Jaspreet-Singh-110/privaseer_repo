@@ -122,6 +122,7 @@ function Popup() {
   const [currentTab, setCurrentTab] = useState<chrome.tabs.Tab | null>(null);
   const [showProtectionToast, setShowProtectionToast] = useState(false);
   const [protectionToastMessage, setProtectionToastMessage] = useState('');
+  const [isTogglingProtection, setIsTogglingProtection] = useState(false);
 
   useEffect(() => {
     checkCurrentTab();
@@ -177,8 +178,19 @@ function Popup() {
   };
 
   const toggleProtection = async () => {
+    if (isTogglingProtection) return;
+
+    setIsTogglingProtection(true);
+
+    const timeout = setTimeout(() => {
+      setIsTogglingProtection(false);
+      logger.warn('Popup', 'Toggle protection timed out');
+    }, 5000);
+
     try {
       const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_PROTECTION' });
+      clearTimeout(timeout);
+
       if (response && response.success) {
         await loadData();
 
@@ -193,6 +205,7 @@ function Popup() {
         logger.info('Popup', 'Protection toggled', { enabled: response.enabled });
       }
     } catch (error) {
+      clearTimeout(timeout);
       const err = toError(error);
       const errorMessage = err.message;
       if (errorMessage.includes('Could not establish connection') ||
@@ -201,6 +214,8 @@ function Popup() {
       } else {
         logger.error('Popup', 'Failed to toggle protection', err);
       }
+    } finally {
+      setIsTogglingProtection(false);
     }
   };
 
@@ -346,14 +361,19 @@ function Popup() {
           </div>
           <button
             onClick={toggleProtection}
+            disabled={isTogglingProtection}
             className={`p-2 rounded-lg transition-colors ${
-              data.settings.protectionEnabled
+              isTogglingProtection
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : data.settings.protectionEnabled
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
             }`}
-            title={data.settings.protectionEnabled ? 'Protection Enabled' : 'Protection Paused'}
+            title={isTogglingProtection ? 'Processing...' : data.settings.protectionEnabled ? 'Protection Enabled' : 'Protection Paused'}
           >
-            {data.settings.protectionEnabled ? (
+            {isTogglingProtection ? (
+              <Activity className="w-4 h-4 animate-spin" />
+            ) : data.settings.protectionEnabled ? (
               <Shield className="w-4 h-4" />
             ) : (
               <ShieldOff className="w-4 h-4" />
