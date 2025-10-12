@@ -238,11 +238,22 @@ function Popup() {
   const handleFeedbackSubmit = async () => {
     try {
       const timestamp = new Date().toISOString();
+      
+      // Extract domain from current tab URL
+      const getDomain = (url?: string): string => {
+        if (!url) return 'unknown';
+        try {
+          return new URL(url).hostname;
+        } catch {
+          return 'unknown';
+        }
+      };
+      
       const feedbackEntry = {
         text: feedbackText,
         timestamp,
         url: currentTab?.url || 'unknown',
-        domain: data?.domain || 'unknown'
+        domain: getDomain(currentTab?.url)
       };
 
       const result = await chrome.storage.local.get('userFeedback');
