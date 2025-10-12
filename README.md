@@ -2,41 +2,41 @@
 
 A privacy-first Chrome extension that blocks trackers, scores your privacy, and scans for deceptive cookie banners - all while keeping your data 100% local.
 
-## ✨ Features
+##  Features
 
-### 🛡️ Real-Time Tracker Blocking
+###  Real-Time Tracker Blocking
 - Blocks 120+ tracking domains across 7 categories
 - 30 declarative blocking rules for maximum performance
 - Per-tab badge showing blocked trackers on current page
 - **NEW:** Actually pause/resume blocking (not just UI state)
 
-### 📊 Privacy Score (0-100)
+###  Privacy Score (0-100)
 - Starts at 100 (perfect privacy)
 - Decreases by 1 for each tracker blocked (-1 point)
 - Increases by 2 for visiting clean sites (+2 points)
 - Decreases by 5 for deceptive cookie banners (-5 points)
 - Real-time updates as you browse
 
-### 🍪 Cookie Consent Scanner
+###  Cookie Consent Scanner
 - Automatically detects cookie banners on every page
 - Checks for GDPR-compliant "Reject All" buttons
 - Identifies dark patterns and deceptive design
 - Alerts you to non-compliant sites
 
-### 📱 Beautiful Popup Interface
+###  Beautiful Popup Interface
 - Live activity feed with color-coded alerts
 - **NEW:** Click info button to learn what trackers do
 - **NEW:** See safer alternatives for each tracker
 - Smooth animations and real-time updates
 - Toggle protection with shield button
 
-### 🔒 100% Private
+###  100% Private
 - **Zero external API calls** - everything runs locally
 - **No telemetry** - we don't collect any data
 - **No accounts** - no login required
 - **Open source** - fully auditable code
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Installation
 
@@ -97,7 +97,7 @@ The extension icon shows a red badge with the number of trackers blocked **on th
 - Switch back to CNN → Badge shows "3" again
 - Navigate to new page → Badge resets to "0"
 
-## 🎯 What's New
+##  What's New
 
 ### v2.1 (Latest) - System Architecture Improvements
 
