@@ -16,6 +16,7 @@ export class FirewallEngine {
   private static isInitialized = false;
   private static badgeUpdateTimers = new Map<number, NodeJS.Timeout>();
   private static cleanSiteAlerts = new Map<string, number>(); // Track clean site alerts by domain
+  private static trackerAlertCache = new Map<string, number>(); // Track tracker alerts by "tracker:site" key
 
   private static readonly RISK_WEIGHTS = {
     'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
@@ -128,41 +129,55 @@ export class FirewallEngine {
       const tab = await chrome.tabs.get(tabId);
       const siteDomain = tab.url ? new URL(tab.url).hostname : 'unknown';
 
-      // Adjust alert severity based on risk weight
-      const getSeverity = (): 'low' | 'medium' | 'high' => {
-        if (riskWeight >= 10) return 'high';
-        if (riskWeight >= 5) return 'high';
-        if (riskWeight >= 2) return 'medium';
-        return 'low';
-      };
+      // Check if we've already alerted about this tracker on this site recently (within 1 minute)
+      const alertKey = `${domain}:${siteDomain}`;
+      const lastAlertTime = this.trackerAlertCache.get(alertKey);
+      const now = Date.now();
 
-      const getAlertType = (): 'tracker_blocked' | 'high_risk' | 'non_compliant_site' => {
-        if (riskWeight >= 10) return 'high_risk';
-        if (isHighRisk) return 'high_risk';
-        return 'tracker_blocked';
-      };
+      if (!lastAlertTime || now - lastAlertTime > 60000) {
+        this.trackerAlertCache.set(alertKey, now);
 
-      const alert: Alert = {
-        id: `${Date.now()}-${Math.random()}`,
-        type: getAlertType(),
-        severity: getSeverity(),
-        message: `Blocked ${domain}${riskWeight > 1 ? ` (${category}, risk: ${riskWeight}x)` : ''}`,
-        domain: siteDomain,
-        timestamp: Date.now(),
-        url: sanitizeUrl(tab.url),
-      };
+        // Adjust alert severity based on risk weight
+        const getSeverity = (): 'low' | 'medium' | 'high' => {
+          if (riskWeight >= 10) return 'high';
+          if (riskWeight >= 5) return 'high';
+          if (riskWeight >= 2) return 'medium';
+          return 'low';
+        };
 
-      await Storage.addAlert(alert);
+        const getAlertType = (): 'tracker_blocked' | 'high_risk' | 'non_compliant_site' => {
+          if (riskWeight >= 10) return 'high_risk';
+          if (isHighRisk) return 'high_risk';
+          return 'tracker_blocked';
+        };
 
-      logger.debug('FirewallEngine', 'Blocked tracker', { 
-        tracker: domain, 
-        category, 
-        riskWeight, 
-        tabId, 
-        site: siteDomain 
-      });
+        const alert: Alert = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: getAlertType(),
+          severity: getSeverity(),
+          message: `Blocked ${domain}${riskWeight > 1 ? ` (${category}, risk: ${riskWeight}x)` : ''}`,
+          domain: siteDomain,
+          timestamp: Date.now(),
+          url: sanitizeUrl(tab.url),
+        };
 
-      this.notifyPopup();
+        await Storage.addAlert(alert);
+
+        logger.debug('FirewallEngine', 'Blocked tracker', {
+          tracker: domain,
+          category,
+          riskWeight,
+          tabId,
+          site: siteDomain
+        });
+
+        this.notifyPopup();
+      } else {
+        logger.debug('FirewallEngine', 'Skipped duplicate alert', {
+          tracker: domain,
+          site: siteDomain
+        });
+      }
     } catch (error) {
       logger.error('FirewallEngine', 'Error handling blocked request', toError(error), { url: sanitizeUrl(url), tabId });
     }

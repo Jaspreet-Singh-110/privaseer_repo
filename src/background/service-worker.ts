@@ -11,6 +11,7 @@ import { sanitizeUrl } from '../utils/sanitizer';
 import { BADGE, TIME } from '../utils/constants';
 
 let isInitialized = false;
+const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
 
 async function initializeExtension(): Promise<void> {
   try {
@@ -70,24 +71,40 @@ function setupMessageHandlers(): void {
       const urlObj = new URL(result.url);
       const domain = urlObj.hostname;
 
-      // Emit non-compliant site event
-      backgroundEvents.emit('NON_COMPLIANT_SITE', {
-        domain,
-        url: result.url,
-        deceptivePatterns: result.deceptivePatterns || [],
-      });
+      // Check if we've already alerted about this domain recently (within 5 minutes)
+      const lastAlertTime = consentAlertCache.get(domain);
+      const now = Date.now();
 
-      await Storage.addAlert({
-        id: `${Date.now()}-${Math.random()}`,
-        type: 'non_compliant_site',
-        severity: 'medium',
-        message: `${domain} has deceptive cookie banner`,
-        domain,
-        timestamp: Date.now(),
-        url: result.url,
-      });
+      // Also check if there's already a recent alert in storage
+      const data = await Storage.get();
+      const recentAlert = data.alerts.find(
+        a => a.domain === domain &&
+        a.message.includes('deceptive cookie banner') &&
+        now - a.timestamp < 300000 // 5 minutes
+      );
 
-      messageBus.broadcast('STATE_UPDATE');
+      if ((!lastAlertTime || now - lastAlertTime > 300000) && !recentAlert) {
+        consentAlertCache.set(domain, now);
+
+        // Emit non-compliant site event
+        backgroundEvents.emit('NON_COMPLIANT_SITE', {
+          domain,
+          url: result.url,
+          deceptivePatterns: result.deceptivePatterns || [],
+        });
+
+        await Storage.addAlert({
+          id: `${Date.now()}-${Math.random()}`,
+          type: 'non_compliant_site',
+          severity: 'medium',
+          message: `${domain} has deceptive cookie banner`,
+          domain,
+          timestamp: Date.now(),
+          url: result.url,
+        });
+
+        messageBus.broadcast('STATE_UPDATE');
+      }
     }
 
     return { success: true };
