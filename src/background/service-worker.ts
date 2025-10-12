@@ -14,6 +14,11 @@ let isInitialized = false;
 const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
 
 async function initializeExtension(): Promise<void> {
+  if (isInitialized) {
+    logger.debug('ServiceWorker', 'Already initialized, skipping');
+    return;
+  }
+
   try {
     logger.info('ServiceWorker', 'Initializing extension...');
 
