@@ -119,8 +119,10 @@ function Popup() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [currentTab, setCurrentTab] = useState<chrome.tabs.Tab | null>(null);
 
   useEffect(() => {
+    checkCurrentTab();
     loadData();
 
     const listener = (message: Message) => {
@@ -142,6 +144,15 @@ function Popup() {
       clearInterval(interval);
     };
   }, [data]);
+
+  const checkCurrentTab = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      setCurrentTab(tab);
+    } catch (error) {
+      logger.error('Popup', 'Failed to get current tab', toError(error));
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -206,6 +217,105 @@ function Popup() {
     return (
       <div className="w-full h-[500px] flex items-center justify-center bg-gray-50">
         <Activity className="w-6 h-6 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  const isValidWebPage = currentTab?.url &&
+    (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'));
+
+  if (!isValidWebPage) {
+    return (
+      <div className="w-full h-[500px] flex flex-col bg-white">
+        <div className="px-6 py-8 flex flex-col items-center justify-center flex-1">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+            <Shield className="w-8 h-8 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Privaseer</h3>
+          <p className="text-sm text-gray-600 text-center max-w-xs mb-6">
+            Open this extension on a website to see privacy insights and tracker blocking.
+          </p>
+          <div className="text-xs text-gray-500 bg-gray-50 px-4 py-2 rounded-lg">
+            Navigate to any http:// or https:// website
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between text-xs">
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Send Feedback</span>
+            </button>
+            <span className="text-gray-500">v2.4.0</span>
+          </div>
+        </div>
+
+        {showFeedbackModal && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Send Feedback</h3>
+                <button
+                  onClick={() => {
+                    setShowFeedbackModal(false);
+                    setFeedbackText('');
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
+                </p>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Type your feedback here..."
+                  className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm transition-all"
+                  autoFocus
+                />
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowFeedbackModal(false);
+                    setFeedbackText('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFeedbackSubmit}
+                  disabled={!feedbackText.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSuccessBanner && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-lg shadow-2xl flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5" />
+              <div>
+                <p className="font-semibold text-sm">Feedback Submitted!</p>
+                <p className="text-xs text-green-100">Thank you for helping us improve</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
