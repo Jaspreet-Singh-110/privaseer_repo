@@ -309,7 +309,7 @@ function Popup() {
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Send Feedback</span>
             </button>
-            <span className="text-gray-500">v1.0.0</span>
+            <span className="text-gray-500">v{__APP_VERSION__}</span>
           </div>
         </div>
 

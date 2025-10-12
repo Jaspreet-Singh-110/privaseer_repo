@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import webExtension from 'vite-plugin-web-extension';
+import manifest from './src/manifest.json';
 
 export default defineConfig({
   plugins: [
@@ -12,5 +13,8 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['lucide-react'],
+  },
+  define: {
+    '__APP_VERSION__': JSON.stringify(manifest.version),
   },
 });
