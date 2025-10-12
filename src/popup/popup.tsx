@@ -362,17 +362,22 @@ function AlertItem({
 
   return (
     <div className="hover:bg-gray-50 transition-colors border-b border-gray-100">
-      <div className="px-6 py-3">
+      <div className="px-6 py-3 cursor-pointer" onClick={handleAlertClick}>
         <div className="flex items-start gap-3">
           <div className="mt-0.5">{getSeverityIcon()}</div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              {getTypeIcon()}
-              <span className="text-xs font-medium text-gray-900 truncate">{alert.message}</span>
+            <div className="flex items-start gap-2 mb-1">
+              <div className="mt-0.5">{getTypeIcon()}</div>
+              <span className={`text-xs font-medium text-gray-900 flex-1 ${isExpanded ? '' : 'truncate'}`}>
+                {alert.message}
+              </span>
               {hasExpandableInfo && (
                 <button
-                  onClick={handleAlertClick}
-                  className="ml-auto p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAlertClick();
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
                   title={isTrackerAlert ? "Show tracker info" : "Show banner details"}
                   disabled={loadingInfo}
                 >
