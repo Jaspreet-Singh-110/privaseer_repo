@@ -14,7 +14,7 @@ const BADGE_UPDATE_DEBOUNCE_MS = 300;
 export class FirewallEngine {
   private static trackerLists: TrackerLists | null = null;
   private static isInitialized = false;
-  private static badgeUpdateTimers = new Map<number, NodeJS.Timeout>();
+  private static badgeUpdateTimers = new Map<number, number>();
   private static cleanSiteAlerts = new Map<string, number>(); // Track clean site alerts by domain
   private static trackerAlertCache = new Map<string, number>(); // Track tracker alerts by "tracker:site" key
 

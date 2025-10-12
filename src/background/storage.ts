@@ -28,7 +28,7 @@ export class Storage {
   private static cache: StorageData | null = null;
   private static listenersSetup = false;
   private static isDirty = false;
-  private static saveTimer: NodeJS.Timeout | null = null;
+  private static saveTimer: number | null = null;
   private static isSaving = false;
   private static readonly SAVE_DELAY = 500; // ms
 

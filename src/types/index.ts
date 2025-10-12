@@ -61,6 +61,8 @@ export type MessageType =
   | 'TRACKER_BLOCKED'
   | 'TAB_ACTIVATED'
   | 'TAB_UPDATED'
+  | 'TAB_REMOVED'
+  | 'CLEAR_ALERTS'
   | 'EXTENSION_READY';
 
 // Message data types for type-safe messaging
@@ -105,6 +107,8 @@ export interface MessageDataMap {
   TRACKER_BLOCKED: undefined;
   TAB_ACTIVATED: undefined;
   TAB_UPDATED: undefined;
+  TAB_REMOVED: undefined;
+  CLEAR_ALERTS: undefined;
   EXTENSION_READY: undefined;
 }
 

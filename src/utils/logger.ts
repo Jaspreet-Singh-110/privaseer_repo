@@ -23,7 +23,7 @@ const MAX_LOG_AGE_MS = TIME.ONE_WEEK_MS;
 const STORAGE_KEY = 'privaseer_logs';
 
 class Logger {
-  private isDevelopment = process.env.NODE_ENV === 'development';
+  private isDevelopment = import.meta.env.DEV;
   private logBuffer: LogEntry[] = [];
   private flushTimer: number | null = null;
   private initialized = false;
@@ -137,24 +137,25 @@ class Logger {
 
     this.scheduleFlush();
 
-    const timestamp = new Date(entry.timestamp).toISOString();
-    const prefix = `[Privaseer ${entry.level.toUpperCase()}] [${entry.category}] ${timestamp}`;
+    // Only output to console in development mode to prevent duplicate logging
+    if (this.isDevelopment) {
+      const timestamp = new Date(entry.timestamp).toISOString();
+      const prefix = `[Privaseer ${entry.level.toUpperCase()}] [${entry.category}] ${timestamp}`;
 
-    switch (entry.level) {
-      case 'debug':
-        if (this.isDevelopment) {
+      switch (entry.level) {
+        case 'debug':
           console.debug(prefix, entry.message, entry.data || '');
-        }
-        break;
-      case 'info':
-        console.log(prefix, entry.message, entry.data || '');
-        break;
-      case 'warn':
-        console.warn(prefix, entry.message, entry.data || '');
-        break;
-      case 'error':
-        console.error(prefix, entry.message, entry.error || '', sanitizeStackTrace(entry.stack) || '');
-        break;
+          break;
+        case 'info':
+          console.log(prefix, entry.message, entry.data || '');
+          break;
+        case 'warn':
+          console.warn(prefix, entry.message, entry.data || '');
+          break;
+        case 'error':
+          console.error(prefix, entry.message, entry.error || '', sanitizeStackTrace(entry.stack) || '');
+          break;
+      }
     }
   }
 
@@ -206,7 +207,7 @@ class Logger {
     await this.ensureInitialized();
     return JSON.stringify({
       exportDate: new Date().toISOString(),
-      version: '2.0.0',
+      version: '1.0.0',
       logs: this.logBuffer,
     }, null, 2);
   }
