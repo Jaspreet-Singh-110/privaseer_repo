@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Burner Email API</title>
+</head>
+<body>
+    <h1>Test Burner Email API</h1>
+    <button onclick="testAPI()">Test Generate Email</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...\n';
+
+            const apiUrl = 'https://uhluvcfnkwmkqvjfjsfh.supabase.co/functions/v1/generate-burner-email';
+            const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVobHV2Y2Zua3dta3F2amZqc2ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MDg2MzMsImV4cCI6MjA3NTA4NDYzM30.QCVlByG6-9962uUdtX0huucgeMJ80iRR2D4kqnPVmZ4';
+
+            try {
+                output.textContent += `API URL: ${apiUrl}\n\n`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${anonKey}`,
+                    },
+                    body: JSON.stringify({
+                        installationId: 'test-installation-123',
+                        domain: 'test.com',
+                        url: 'https://test.com',
+                        label: 'Test'
+                    })
+                });
+
+                output.textContent += `Response Status: ${response.status} ${response.statusText}\n\n`;
+
+                const data = await response.json();
+                output.textContent += `Response Data:\n${JSON.stringify(data, null, 2)}\n`;
+
+            } catch (error) {
+                output.textContent += `Error: ${error.message}\n${error.stack}`;
+            }
+        }
+    </script>
+</body>
+</html>
