@@ -22,6 +22,11 @@
       "matches": ["http://*/*", "https://*/*"],
       "js": ["src/content-scripts/consent-scanner.ts"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content-scripts/email-autofill.ts"],
+      "run_at": "document_idle"
     }
   ],
   "action": {

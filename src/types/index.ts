@@ -63,7 +63,10 @@ export type MessageType =
   | 'TAB_UPDATED'
   | 'TAB_REMOVED'
   | 'CLEAR_ALERTS'
-  | 'EXTENSION_READY';
+  | 'EXTENSION_READY'
+  | 'GENERATE_BURNER_EMAIL'
+  | 'GET_BURNER_EMAILS'
+  | 'DELETE_BURNER_EMAIL';
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {
@@ -157,4 +160,15 @@ export interface PrivacyRules {
     severity: string;
     penalty: number;
   }>;
+}
+
+export interface BurnerEmail {
+  id: string;
+  email: string;
+  domain: string;
+  url?: string;
+  label?: string;
+  is_active: boolean;
+  times_used: number;
+  created_at: string;
 }

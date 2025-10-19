@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, MessageSquare, X, Send } from 'lucide-react';
+import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, MessageSquare, X, Send, Mail } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { BurnerEmailsSection } from './burner-emails-section';
 import '../index.css';
 
 function PrivacyScoreMeter({ score }: { score: number }) {
@@ -124,6 +125,7 @@ function Popup() {
   const [protectionToastMessage, setProtectionToastMessage] = useState('');
   const [protectionToastState, setProtectionToastState] = useState(false);
   const [isTogglingProtection, setIsTogglingProtection] = useState(false);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'burner'>('dashboard');
 
   useEffect(() => {
     checkCurrentTab();
@@ -387,7 +389,7 @@ function Popup() {
 
   return (
     <div className="w-full h-[600px] flex flex-col bg-white">
-      <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200`}>
+      <div className="px-6 py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
@@ -414,6 +416,44 @@ function Popup() {
             )}
           </button>
         </div>
+
+        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'dashboard'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <Activity className="w-4 h-4" />
+              <span>Dashboard</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('burner')}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'burner'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <Mail className="w-4 h-4" />
+              <span>Burner Emails</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'burner' ? (
+        <div className="flex-1 overflow-y-auto">
+          <BurnerEmailsSection />
+        </div>
+      ) : (
+        <>
+      <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200`}>
 
         <div className="flex items-center justify-center mb-3">
           <PrivacyScoreMeter score={score} />
@@ -566,6 +606,8 @@ function Popup() {
           </div>
         </div>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -702,8 +744,6 @@ function AlertItem({
         </div>
       )}
 
-      {/* DISABLED: Consent scanning feature - Cookie banner alert details */}
-      {/*
       {isExpanded && isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0 && (
         <div className="px-6 pb-3">
           <div className="ml-5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
@@ -731,7 +771,6 @@ function AlertItem({
           </div>
         </div>
       )}
-      */}
     </div>
   );
 }

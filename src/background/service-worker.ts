@@ -1,6 +1,7 @@
 import { Storage } from './storage';
 import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
+import { burnerEmailService } from './burner-email-service';
 import type { MessagePayload, ConsentScanResult } from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
@@ -39,6 +40,7 @@ async function initializeExtension(): Promise<void> {
       // Initialize core components
       await Storage.initialize();
       await FirewallEngine.initialize();
+      await burnerEmailService.initialize();
 
       await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
 
@@ -138,6 +140,38 @@ function setupMessageHandlers(): void {
     }
 
     return { success: true };
+  });
+
+  messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
+    try {
+      const { domain, url, label } = data as { domain: string; url?: string; label?: string };
+      const email = await burnerEmailService.generateEmail(domain, url, label);
+      return { success: true, email };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to generate burner email', toError(error));
+      return { success: false, error: 'Failed to generate burner email' };
+    }
+  });
+
+  messageBus.on('GET_BURNER_EMAILS', async () => {
+    try {
+      const emails = await burnerEmailService.getEmails();
+      return { success: true, emails };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to fetch burner emails', toError(error));
+      return { success: false, error: 'Failed to fetch burner emails' };
+    }
+  });
+
+  messageBus.on('DELETE_BURNER_EMAIL', async (data: unknown) => {
+    try {
+      const { emailId } = data as { emailId: string };
+      await burnerEmailService.deleteEmail(emailId);
+      return { success: true };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to delete burner email', toError(error));
+      return { success: false, error: 'Failed to delete burner email' };
+    }
   });
 }
 
