@@ -30,7 +30,8 @@ class EmailAutofill {
 
       if (this.isEmailInput(target)) {
         setTimeout(() => {
-          if (document.activeElement !== this.burnerEmailButton) {
+          const clickedElement = event.relatedTarget as HTMLElement;
+          if (clickedElement !== this.burnerEmailButton && !this.burnerEmailButton?.contains(clickedElement)) {
             this.hideBurnerEmailButton();
           }
         }, 200);
@@ -122,9 +123,18 @@ class EmailAutofill {
       button.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
     });
 
+    button.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
     button.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      button.style.opacity = '0.6';
+      button.style.pointerEvents = 'none';
+
       await this.generateAndFillBurnerEmail(input);
     });
 
@@ -150,11 +160,18 @@ class EmailAutofill {
   }
 
   private async generateAndFillBurnerEmail(input: HTMLInputElement): Promise<void> {
-    if (this.isProcessing) return;
+    if (this.isProcessing) {
+      logger.debug('EmailAutofill', 'Already processing, ignoring click');
+      return;
+    }
+
     this.isProcessing = true;
+    logger.debug('EmailAutofill', 'Starting burner email generation');
 
     try {
       const domain = new URL(window.location.href).hostname;
+
+      logger.debug('EmailAutofill', 'Sending message to background', { domain });
 
       const response = await chrome.runtime.sendMessage({
         type: 'GENERATE_BURNER_EMAIL',
@@ -164,7 +181,9 @@ class EmailAutofill {
         },
       });
 
-      if (response.success && response.email) {
+      logger.debug('EmailAutofill', 'Received response', { response });
+
+      if (response && response.success && response.email) {
         input.value = response.email;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -172,13 +191,17 @@ class EmailAutofill {
         this.showSuccessNotification(response.email);
         this.hideBurnerEmailButton();
 
-        logger.info('EmailAutofill', 'Burner email generated and filled', { domain });
+        logger.info('EmailAutofill', 'Burner email generated and filled', { domain, email: response.email });
       } else {
-        this.showErrorNotification('Failed to generate burner email');
+        const errorMsg = response?.error || 'Failed to generate burner email';
+        logger.error('EmailAutofill', 'Generation failed', new Error(errorMsg));
+        this.showErrorNotification(errorMsg);
+        this.hideBurnerEmailButton();
       }
     } catch (error) {
       logger.error('EmailAutofill', 'Failed to generate burner email', toError(error));
-      this.showErrorNotification('Failed to generate burner email');
+      this.showErrorNotification('Could not connect to service');
+      this.hideBurnerEmailButton();
     } finally {
       this.isProcessing = false;
     }

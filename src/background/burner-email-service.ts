@@ -4,16 +4,20 @@ import { toError } from '../utils/type-guards';
 
 class BurnerEmailService {
   private installationId: string | null = null;
+  private supabaseUrl: string = 'https://uhluvcfnkwmkqvjfjsfh.supabase.co';
+  private supabaseAnonKey: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVobHV2Y2Zua3dta3F2amZqc2ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MDg2MzMsImV4cCI6MjA3NTA4NDYzM30.QCVlByG6-9962uUdtX0huucgeMJ80iRR2D4kqnPVmZ4';
   private apiUrl: string;
 
   constructor() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    this.apiUrl = `${supabaseUrl}/functions/v1/generate-burner-email`;
+    this.apiUrl = `${this.supabaseUrl}/functions/v1/generate-burner-email`;
   }
 
   async initialize(): Promise<void> {
     this.installationId = await this.getOrCreateInstallationId();
-    logger.debug('BurnerEmailService', 'Initialized', { installationId: this.installationId });
+    logger.debug('BurnerEmailService', 'Initialized', {
+      installationId: this.installationId,
+      apiUrl: this.apiUrl
+    });
   }
 
   private async getOrCreateInstallationId(): Promise<string> {
@@ -34,11 +38,17 @@ class BurnerEmailService {
         await this.initialize();
       }
 
+      logger.debug('BurnerEmailService', 'Making API request', {
+        apiUrl: this.apiUrl,
+        domain,
+        installationId: this.installationId
+      });
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${this.supabaseAnonKey}`,
         },
         body: JSON.stringify({
           installationId: this.installationId,
@@ -77,7 +87,7 @@ class BurnerEmailService {
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${this.supabaseAnonKey}`,
           },
         }
       );
@@ -106,7 +116,7 @@ class BurnerEmailService {
         {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${this.supabaseAnonKey}`,
           },
         }
       );
