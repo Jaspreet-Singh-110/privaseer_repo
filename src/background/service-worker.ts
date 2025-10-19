@@ -144,12 +144,16 @@ function setupMessageHandlers(): void {
 
   messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
     try {
+      logger.debug('ServiceWorker', 'GENERATE_BURNER_EMAIL handler called', { data });
       const { domain, url, label } = data as { domain: string; url?: string; label?: string };
+      logger.debug('ServiceWorker', 'Calling burnerEmailService.generateEmail', { domain, url, label });
       const email = await burnerEmailService.generateEmail(domain, url, label);
+      logger.debug('ServiceWorker', 'Email generated successfully', { email });
       return { success: true, email };
     } catch (error) {
-      logger.error('ServiceWorker', 'Failed to generate burner email', toError(error));
-      return { success: false, error: 'Failed to generate burner email' };
+      const err = toError(error);
+      logger.error('ServiceWorker', 'Failed to generate burner email', err);
+      return { success: false, error: err.message };
     }
   });
 
