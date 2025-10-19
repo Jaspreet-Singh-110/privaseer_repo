@@ -69,6 +69,10 @@ class Logger {
 
   private async saveLogs(): Promise<void> {
     try {
+      if (!chrome?.runtime?.id) {
+        return;
+      }
+
       const storage: LogStorage = {
         logs: this.logBuffer.slice(-MAX_LOGS),
         lastCleanup: Date.now(),
@@ -76,7 +80,7 @@ class Logger {
 
       await chrome.storage.local.set({ [STORAGE_KEY]: storage });
     } catch (error) {
-      console.error('[Logger] Failed to save logs:', error);
+      // Silent fail - extension context may be invalidated
     }
   }
 

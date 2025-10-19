@@ -171,15 +171,37 @@ class EmailAutofill {
     try {
       const domain = new URL(window.location.href).hostname;
 
+      if (!chrome?.runtime?.id) {
+        throw new Error('Extension context invalidated - please reload the page');
+      }
+
       logger.debug('EmailAutofill', 'Sending message to background', { domain });
 
-      const response = await chrome.runtime.sendMessage({
-        type: 'GENERATE_BURNER_EMAIL',
-        data: {
-          domain,
-          url: window.location.href,
-        },
-      });
+      let response;
+      let retries = 0;
+      const maxRetries = 2;
+
+      while (retries <= maxRetries) {
+        try {
+          response = await chrome.runtime.sendMessage({
+            type: 'GENERATE_BURNER_EMAIL',
+            data: {
+              domain,
+              url: window.location.href,
+            },
+          });
+          break;
+        } catch (err) {
+          const error = toError(err);
+          if (error.message.includes('Receiving end does not exist') && retries < maxRetries) {
+            logger.debug('EmailAutofill', 'Service worker asleep, retrying...', { attempt: retries + 1 });
+            retries++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } else {
+            throw error;
+          }
+        }
+      }
 
       logger.debug('EmailAutofill', 'Received response', { response });
 
@@ -199,8 +221,17 @@ class EmailAutofill {
         this.hideBurnerEmailButton();
       }
     } catch (error) {
-      logger.error('EmailAutofill', 'Failed to generate burner email', toError(error));
-      this.showErrorNotification('Could not connect to service');
+      const err = toError(error);
+      logger.error('EmailAutofill', 'Failed to generate burner email', err);
+
+      if (err.message.includes('Extension context invalidated')) {
+        this.showErrorNotification('Please reload the page to use burner emails');
+      } else if (err.message.includes('Receiving end does not exist')) {
+        this.showErrorNotification('Extension not ready - please try again');
+      } else {
+        this.showErrorNotification('Could not generate burner email');
+      }
+
       this.hideBurnerEmailButton();
     } finally {
       this.isProcessing = false;
