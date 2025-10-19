@@ -34,9 +34,14 @@ class BurnerEmailService {
 
   async generateEmail(domain: string, url?: string, label?: string): Promise<string> {
     try {
+      console.log('[BURNER EMAIL] Starting generation', { domain, url, label });
+
       if (!this.installationId) {
         await this.initialize();
       }
+
+      console.log('[BURNER EMAIL] Installation ID:', this.installationId);
+      console.log('[BURNER EMAIL] API URL:', this.apiUrl);
 
       logger.debug('BurnerEmailService', 'Making API request', {
         apiUrl: this.apiUrl,
@@ -58,6 +63,8 @@ class BurnerEmailService {
         }),
       });
 
+      console.log('[BURNER EMAIL] Response status:', response.status, response.statusText);
+
       logger.debug('BurnerEmailService', 'API response received', {
         status: response.status,
         statusText: response.statusText,
@@ -72,10 +79,13 @@ class BurnerEmailService {
         throw new Error('Invalid response from server');
       }
 
+      console.log('[BURNER EMAIL] Response data:', data);
+
       logger.debug('BurnerEmailService', 'Response data', { data });
 
       if (!response.ok || !data.success) {
         const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
+        console.error('[BURNER EMAIL] API request failed:', errorMsg);
         logger.error('BurnerEmailService', 'API request failed', new Error(errorMsg));
         throw new Error(errorMsg);
       }
@@ -85,8 +95,10 @@ class BurnerEmailService {
         email: data.email.email,
       });
 
+      console.log('[BURNER EMAIL] Success! Email:', data.email.email);
       return data.email.email;
     } catch (error) {
+      console.error('[BURNER EMAIL] Error:', error);
       logger.error('BurnerEmailService', 'Failed to generate burner email', toError(error));
       throw error;
     }
