@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
       if (error) {
         console.error("Database error:", error);
         return new Response(
-          JSON.stringify({ error: "Failed to create burner email" }),
+          JSON.stringify({ error: "Failed to create burner email", details: error.message }),
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -213,7 +213,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Edge function error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "Internal server error", details: error instanceof Error ? error.message : String(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

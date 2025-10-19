@@ -58,10 +58,26 @@ class BurnerEmailService {
         }),
       });
 
-      const data = await response.json();
+      logger.debug('BurnerEmailService', 'API response received', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        logger.error('BurnerEmailService', 'Failed to parse response', toError(parseError));
+        throw new Error('Invalid response from server');
+      }
+
+      logger.debug('BurnerEmailService', 'Response data', { data });
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate burner email');
+        const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
+        logger.error('BurnerEmailService', 'API request failed', new Error(errorMsg));
+        throw new Error(errorMsg);
       }
 
       logger.info('BurnerEmailService', 'Burner email generated', {
