@@ -66,7 +66,9 @@ export type MessageType =
   | 'EXTENSION_READY'
   | 'GENERATE_BURNER_EMAIL'
   | 'GET_BURNER_EMAILS'
-  | 'DELETE_BURNER_EMAIL';
+  | 'DELETE_BURNER_EMAIL'
+  | 'SUBMIT_FEEDBACK'
+  | 'TRACK_EVENT';
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {

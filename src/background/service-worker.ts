@@ -2,6 +2,7 @@ import { Storage } from './storage';
 import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
 import { burnerEmailService } from './burner-email-service';
+import { feedbackTelemetryService } from './feedback-telemetry-service';
 import type { MessagePayload, ConsentScanResult } from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
@@ -41,6 +42,7 @@ async function initializeExtension(): Promise<void> {
       await Storage.initialize();
       await FirewallEngine.initialize();
       await burnerEmailService.initialize();
+      await feedbackTelemetryService.initialize();
 
       await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
 
@@ -66,6 +68,10 @@ function setupMessageHandlers(): void {
 
   messageBus.on('TOGGLE_PROTECTION', async () => {
     const enabled = await FirewallEngine.toggleProtection();
+    feedbackTelemetryService.trackEvent({
+      eventType: 'protection_toggled',
+      eventData: { enabled },
+    }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
     return { success: true, enabled };
   });
 
@@ -147,6 +153,10 @@ function setupMessageHandlers(): void {
       const { domain, url, label } = data as { domain: string; url?: string; label?: string };
       const email = await burnerEmailService.generateEmail(domain, url, label);
       logger.debug('ServiceWorker', 'Email generated successfully', { email });
+      feedbackTelemetryService.trackEvent({
+        eventType: 'burner_email_generated',
+        eventData: { domain },
+      }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
       return { success: true, email };
     } catch (error) {
       const err = toError(error);
@@ -173,6 +183,28 @@ function setupMessageHandlers(): void {
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to delete burner email', toError(error));
       return { success: false, error: 'Failed to delete burner email' };
+    }
+  });
+
+  messageBus.on('SUBMIT_FEEDBACK', async (data: unknown) => {
+    try {
+      const { feedbackText, url, domain } = data as { feedbackText: string; url?: string; domain?: string };
+      const result = await feedbackTelemetryService.submitFeedback({ feedbackText, url, domain });
+      return result;
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to submit feedback', toError(error));
+      return { success: false, error: 'Failed to submit feedback' };
+    }
+  });
+
+  messageBus.on('TRACK_EVENT', async (data: unknown) => {
+    try {
+      const { eventType, eventData } = data as { eventType: string; eventData?: Record<string, unknown> };
+      await feedbackTelemetryService.trackEvent({ eventType, eventData });
+      return { success: true };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to track event', toError(error));
+      return { success: false, error: 'Failed to track event' };
     }
   });
 }
@@ -219,8 +251,18 @@ function setupCleanupInterval(): void {
   }, TIME.ONE_HOUR_MS);
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   await initializeExtension();
+  if (details.reason === 'install') {
+    feedbackTelemetryService.trackEvent({
+      eventType: 'extension_installed',
+    }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
+  } else if (details.reason === 'update') {
+    feedbackTelemetryService.trackEvent({
+      eventType: 'extension_updated',
+      eventData: { previousVersion: details.previousVersion },
+    }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {

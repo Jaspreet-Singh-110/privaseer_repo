@@ -235,9 +235,6 @@ function Popup() {
 
   const handleFeedbackSubmit = async () => {
     try {
-      const timestamp = new Date().toISOString();
-      
-      // Extract domain from current tab URL
       const getDomain = (url?: string): string => {
         if (!url) return 'unknown';
         try {
@@ -246,28 +243,27 @@ function Popup() {
           return 'unknown';
         }
       };
-      
-      const feedbackEntry = {
-        text: feedbackText,
-        timestamp,
-        url: currentTab?.url || 'unknown',
-        domain: getDomain(currentTab?.url)
-      };
 
-      const result = await chrome.storage.local.get('userFeedback');
-      const existingFeedback = result.userFeedback || [];
-      existingFeedback.push(feedbackEntry);
+      const response = await chrome.runtime.sendMessage({
+        type: 'SUBMIT_FEEDBACK',
+        data: {
+          feedbackText,
+          url: currentTab?.url || 'unknown',
+          domain: getDomain(currentTab?.url),
+        },
+      });
 
-      await chrome.storage.local.set({ userFeedback: existingFeedback });
-
-      logger.info('User feedback stored', { timestamp, domain: feedbackEntry.domain });
-
-      setShowFeedbackModal(false);
-      setFeedbackText('');
-      setShowSuccessBanner(true);
-      setTimeout(() => setShowSuccessBanner(false), 3000);
+      if (response.success) {
+        logger.info('User feedback submitted', { domain: getDomain(currentTab?.url) });
+        setShowFeedbackModal(false);
+        setFeedbackText('');
+        setShowSuccessBanner(true);
+        setTimeout(() => setShowSuccessBanner(false), 3000);
+      } else {
+        logger.error('Failed to submit feedback', new Error(response.error || 'Unknown error'));
+      }
     } catch (error) {
-      logger.error('Failed to store feedback', toError(error));
+      logger.error('Failed to submit feedback', toError(error));
     }
   };
 
