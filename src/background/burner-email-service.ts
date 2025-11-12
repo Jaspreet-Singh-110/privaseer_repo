@@ -4,8 +4,8 @@ import { toError } from '../utils/type-guards';
 
 class BurnerEmailService {
   private installationId: string | null = null;
-  private supabaseUrl: string = 'https://uhluvcfnkwmkqvjfjsfh.supabase.co';
-  private supabaseAnonKey: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVobHV2Y2Zua3dta3F2amZqc2ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MDg2MzMsImV4cCI6MjA3NTA4NDYzM30.QCVlByG6-9962uUdtX0huucgeMJ80iRR2D4kqnPVmZ4';
+  private supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL;
+  private supabaseAnonKey: string = import.meta.env.VITE_SUPABASE_ANON_KEY;
   private apiUrl: string;
 
   constructor() {
