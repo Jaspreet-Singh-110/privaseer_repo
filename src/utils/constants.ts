@@ -53,3 +53,8 @@ export const STORAGE_RETRY = {
   INITIAL_DELAY_MS: 1000,
   BACKOFF_MULTIPLIER: 2,
 } as const;
+
+export const SUPABASE = {
+  URL: 'https://llffqxdhpgsqnpzeznaq.supabase.co',
+  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZmZxeGRocGdzcW5wemV6bmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NjMxNjIsImV4cCI6MjA3NjQzOTE2Mn0.Eaug9z-gFKPiD3vGI7yKXVUUwJMEMsfUnZ3SXj9SO4Y',
+} as const;

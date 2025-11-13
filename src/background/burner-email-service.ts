@@ -1,11 +1,12 @@
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { SUPABASE } from '../utils/constants';
 
 class BurnerEmailService {
   private installationId: string | null = null;
-  private supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL;
-  private supabaseAnonKey: string = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  private supabaseUrl: string = SUPABASE.URL;
+  private supabaseAnonKey: string = SUPABASE.ANON_KEY;
   private apiUrl: string;
 
   constructor() {

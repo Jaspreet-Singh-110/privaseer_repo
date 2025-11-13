@@ -1,10 +1,9 @@
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { SUPABASE } from '../utils/constants';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const FEEDBACK_ENDPOINT = `${SUPABASE_URL}/functions/v1/submit-feedback/feedback`;
-const TELEMETRY_ENDPOINT = `${SUPABASE_URL}/functions/v1/submit-feedback/telemetry`;
+const FEEDBACK_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/feedback`;
+const TELEMETRY_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/telemetry`;
 const EXTENSION_VERSION = '2.4.0';
 
 interface FeedbackData {
@@ -65,7 +64,7 @@ class FeedbackTelemetryService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
         },
         body: JSON.stringify({
           installationId: this.installationId,
@@ -101,7 +100,7 @@ class FeedbackTelemetryService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
         },
         body: JSON.stringify({
           installationId: this.installationId,
