@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, MessageSquare, X, Send, Mail } from 'lucide-react';
+import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
+import { SettingsPage } from './settings-page';
 import '../index.css';
 
 function PrivacyScoreMeter({ score }: { score: number }) {
@@ -117,9 +118,8 @@ function Popup() {
   const [data, setData] = useState<StorageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [currentTab, setCurrentTab] = useState<chrome.tabs.Tab | null>(null);
   const [showProtectionToast, setShowProtectionToast] = useState(false);
   const [protectionToastMessage, setProtectionToastMessage] = useState('');
@@ -233,38 +233,9 @@ function Popup() {
     });
   };
 
-  const handleFeedbackSubmit = async () => {
-    try {
-      const getDomain = (url?: string): string => {
-        if (!url) return 'unknown';
-        try {
-          return new URL(url).hostname;
-        } catch {
-          return 'unknown';
-        }
-      };
-
-      const response = await chrome.runtime.sendMessage({
-        type: 'SUBMIT_FEEDBACK',
-        data: {
-          feedbackText,
-          url: currentTab?.url || 'unknown',
-          domain: getDomain(currentTab?.url),
-        },
-      });
-
-      if (response.success) {
-        logger.info('User feedback submitted', { domain: getDomain(currentTab?.url) });
-        setShowFeedbackModal(false);
-        setFeedbackText('');
-        setShowSuccessBanner(true);
-        setTimeout(() => setShowSuccessBanner(false), 3000);
-      } else {
-        logger.error('Failed to submit feedback', new Error(response.error || 'Unknown error'));
-      }
-    } catch (error) {
-      logger.error('Failed to submit feedback', toError(error));
-    }
+  const handleFeedbackSuccess = () => {
+    setShowSuccessBanner(true);
+    setTimeout(() => setShowSuccessBanner(false), 3000);
   };
 
   if (loading || !data) {
@@ -281,11 +252,25 @@ function Popup() {
   if (!isValidWebPage) {
     return (
       <div className="w-full h-[500px] flex flex-col bg-white">
+        <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg font-bold text-gray-900">Privaseer</h1>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+
         <div className="px-6 py-8 flex flex-col items-center justify-center flex-1">
           <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
             <Shield className="w-8 h-8 text-blue-600" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Privaseer</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Welcome</h3>
           <p className="text-sm text-gray-600 text-center max-w-xs mb-6">
             Open this extension on a website to see privacy insights and tracker blocking.
           </p>
@@ -294,70 +279,12 @@ function Popup() {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between text-xs">
-            <button
-              onClick={() => setShowFeedbackModal(true)}
-              className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium transition-colors"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Send Feedback</span>
-            </button>
-            <span className="text-gray-500">v{__APP_VERSION__}</span>
-          </div>
-        </div>
-
-        {showFeedbackModal && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Send Feedback</h3>
-                <button
-                  onClick={() => {
-                    setShowFeedbackModal(false);
-                    setFeedbackText('');
-                  }}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <p className="text-sm text-gray-600 mb-4">
-                  Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
-                </p>
-                <textarea
-                  value={feedbackText}
-                  onChange={(e) => setFeedbackText(e.target.value)}
-                  placeholder="Type your feedback here..."
-                  className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm transition-all"
-                  autoFocus
-                />
-              </div>
-
-              <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setShowFeedbackModal(false);
-                    setFeedbackText('');
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleFeedbackSubmit}
-                  disabled={!feedbackText.trim()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Submit
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <SettingsPage
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          currentTab={currentTab}
+          onFeedbackSuccess={handleFeedbackSuccess}
+        />
 
         {showSuccessBanner && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
@@ -387,26 +314,35 @@ function Popup() {
             <Shield className="w-5 h-5 text-blue-600" />
             <h1 className="text-lg font-bold text-gray-900">Privaseer</h1>
           </div>
-          <button
-            onClick={toggleProtection}
-            disabled={isTogglingProtection}
-            className={`p-2 rounded-lg transition-colors ${
-              isTogglingProtection
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : data.settings.protectionEnabled
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-            title={isTogglingProtection ? 'Processing...' : data.settings.protectionEnabled ? 'Protection Enabled' : 'Protection Paused'}
-          >
-            {isTogglingProtection ? (
-              <Activity className="w-4 h-4 animate-spin" />
-            ) : data.settings.protectionEnabled ? (
-              <Shield className="w-4 h-4" />
-            ) : (
-              <ShieldOff className="w-4 h-4" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={toggleProtection}
+              disabled={isTogglingProtection}
+              className={`p-2 rounded-lg transition-colors ${
+                isTogglingProtection
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : data.settings.protectionEnabled
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+              title={isTogglingProtection ? 'Processing...' : data.settings.protectionEnabled ? 'Protection Enabled' : 'Protection Paused'}
+            >
+              {isTogglingProtection ? (
+                <Activity className="w-4 h-4 animate-spin" />
+              ) : data.settings.protectionEnabled ? (
+                <Shield className="w-4 h-4" />
+              ) : (
+                <ShieldOff className="w-4 h-4" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
@@ -504,70 +440,12 @@ function Popup() {
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between text-xs">
-          <button
-            onClick={() => setShowFeedbackModal(true)}
-            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>Send Feedback</span>
-          </button>
-          <span className="text-gray-500">v1.0.0</span>
-        </div>
-      </div>
-
-      {showFeedbackModal && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Send Feedback</h3>
-              <button
-                onClick={() => {
-                  setShowFeedbackModal(false);
-                  setFeedbackText('');
-                }}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <p className="text-sm text-gray-600 mb-4">
-                Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
-              </p>
-              <textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="Type your feedback here..."
-                className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm transition-all"
-                autoFocus
-              />
-            </div>
-
-            <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowFeedbackModal(false);
-                  setFeedbackText('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleFeedbackSubmit}
-                disabled={!feedbackText.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
-              >
-                <Send className="w-4 h-4" />
-                Submit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SettingsPage
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        currentTab={currentTab}
+        onFeedbackSuccess={handleFeedbackSuccess}
+      />
 
       {showSuccessBanner && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
