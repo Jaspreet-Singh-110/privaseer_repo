@@ -60,25 +60,62 @@ class FeedbackTelemetryService {
         await this.initialize();
       }
 
+      logger.debug('FeedbackTelemetryService', 'Submitting feedback', {
+        endpoint: FEEDBACK_ENDPOINT,
+        installationId: this.installationId,
+        textLength: data.feedbackText.length
+      });
+
+      const requestBody = {
+        installationId: this.installationId,
+        feedbackText: data.feedbackText,
+        url: data.url || undefined,
+        domain: data.domain || undefined,
+        extensionVersion: EXTENSION_VERSION,
+        browserVersion: this.browserVersion,
+      };
+
       const response = await fetch(FEEDBACK_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
         },
-        body: JSON.stringify({
-          installationId: this.installationId,
-          feedbackText: data.feedbackText,
-          url: data.url,
-          domain: data.domain,
-          extensionVersion: EXTENSION_VERSION,
-          browserVersion: this.browserVersion,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      logger.debug('FeedbackTelemetryService', 'Response received', {
+        status: response.status,
+        ok: response.ok
+      });
+
+      const responseText = await response.text();
+      logger.debug('FeedbackTelemetryService', 'Response text', { text: responseText.substring(0, 200) });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = {};
+        }
+        const errorMsg = errorData.error || errorData.details || `HTTP ${response.status}`;
+        logger.error('FeedbackTelemetryService', 'HTTP error', new Error(errorMsg));
+        throw new Error(errorMsg);
+      }
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        logger.error('FeedbackTelemetryService', 'Parse error', toError(parseError), { responseText });
+        throw new Error('Invalid response from server');
+      }
+
+      if (!result.success) {
+        const errorMsg = result.error || 'Server returned success=false';
+        logger.error('FeedbackTelemetryService', 'API error', new Error(errorMsg));
+        throw new Error(errorMsg);
       }
 
       logger.info('FeedbackTelemetryService', 'Feedback submitted successfully');

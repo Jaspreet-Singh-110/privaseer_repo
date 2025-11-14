@@ -42,8 +42,19 @@ class BurnerEmailService {
       logger.debug('BurnerEmailService', 'Making API request', {
         apiUrl: this.apiUrl,
         domain,
-        installationId: this.installationId
+        installationId: this.installationId,
+        hasUrl: !!url,
+        hasLabel: !!label
       });
+
+      const requestBody = {
+        installationId: this.installationId,
+        domain,
+        url: url || undefined,
+        label: label || undefined,
+      };
+
+      logger.debug('BurnerEmailService', 'Request body', requestBody);
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -51,45 +62,56 @@ class BurnerEmailService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.supabaseAnonKey}`,
         },
-        body: JSON.stringify({
-          installationId: this.installationId,
-          domain,
-          url,
-          label,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
-      logger.debug('BurnerEmailService', 'API response received', {
+      logger.debug('BurnerEmailService', 'Response received', {
         status: response.status,
         statusText: response.statusText,
-        ok: response.ok
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
       });
+
+      const responseText = await response.text();
+      logger.debug('BurnerEmailService', 'Response text', { text: responseText.substring(0, 500) });
 
       let data;
       try {
-        data = await response.json();
+        data = JSON.parse(responseText);
       } catch (parseError) {
-        logger.error('BurnerEmailService', 'Failed to parse response', toError(parseError));
-        throw new Error('Invalid response from server');
+        logger.error('BurnerEmailService', 'JSON parse error', toError(parseError), { responseText });
+        throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 100)}`);
       }
 
-      logger.debug('BurnerEmailService', 'Response data', { data });
+      logger.debug('BurnerEmailService', 'Parsed response', { success: data.success, hasEmail: !!data.email });
 
-      if (!response.ok || !data.success) {
-        const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
-        logger.error('BurnerEmailService', 'API request failed', new Error(errorMsg));
+      if (!response.ok) {
+        const errorMsg = data.error || data.details || `HTTP ${response.status}: ${response.statusText}`;
+        logger.error('BurnerEmailService', 'HTTP error', new Error(errorMsg), { data });
         throw new Error(errorMsg);
       }
 
-      logger.info('BurnerEmailService', 'Burner email generated', {
+      if (!data.success) {
+        const errorMsg = data.error || data.details || 'Server returned success=false';
+        logger.error('BurnerEmailService', 'API error', new Error(errorMsg), { data });
+        throw new Error(errorMsg);
+      }
+
+      if (!data.email || !data.email.email) {
+        logger.error('BurnerEmailService', 'Missing email in response', new Error('No email field'), { data });
+        throw new Error('Server did not return an email address');
+      }
+
+      logger.info('BurnerEmailService', 'Success', {
         domain,
         email: data.email.email,
       });
 
       return data.email.email;
     } catch (error) {
-      logger.error('BurnerEmailService', 'Failed to generate burner email', toError(error));
-      throw error;
+      const err = toError(error);
+      logger.error('BurnerEmailService', 'Generate email failed', err, { domain });
+      throw new Error(`Failed to generate burner email: ${err.message}`);
     }
   }
 
