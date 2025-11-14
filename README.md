@@ -1,6 +1,6 @@
 # Privaseer
 
-**Version 1.0.0** - A production-ready, privacy-first Chrome extension that blocks trackers, scores your privacy, and scans for deceptive cookie banners - all while keeping your data 100% local.
+**Version 2.4.0** - A production-ready, privacy-first Chrome extension that blocks trackers, scores your privacy, scans for deceptive cookie banners, and generates disposable burner emails to protect your identity online.
 
 > Built with TypeScript, React 18, and Manifest V3 for maximum performance and security.
 
@@ -29,18 +29,32 @@
 - **Real-time alerts** for non-compliant sites
 - **DOM-based scanning** with comprehensive pattern matching
 
+### 📧 Burner Email Generator
+- **One-click disposable emails** - generate random email addresses instantly
+- **Automatic form fill** - click any email field to see the generator button
+- **Email management** - view and delete your burner emails in the popup
+- **Domain tracking** - see which sites you've used burner emails on
+- **Privacy protection** - keep your real email address private
+
+### 💬 Feedback System
+- **Submit feedback** directly from the extension popup
+- **Bug reporting** - help improve the extension
+- **Feature requests** - suggest new features
+- **Privacy-respecting** - only collects what you explicitly submit
+
 ### 📱 Beautiful Popup Interface
 - **Live activity feed** with color-coded alerts (green/yellow/red)
 - **Interactive tracker info** - click ℹ️ button to learn what trackers do
 - **Safer alternatives** suggested for each tracker
 - **Smooth animations** with React 18 and Tailwind CSS
 - **One-click toggle** protection with shield button
+- **Dual-tab interface** - Dashboard and Burner Emails sections
 - **Dynamic version display** synced with manifest.json
 
-### 🔒 100% Private & Secure
-- **Zero external API calls** - everything runs locally on your device
-- **No telemetry** - we don't collect any data about you
-- **No accounts** - no login, no registration, no tracking
+### 🔒 Private & Secure
+- **Local-first architecture** - all tracking data stays on your device
+- **Optional feedback system** - submit feedback only when you choose to
+- **No accounts required** - no login, no registration, no authentication
 - **Open source** - fully auditable code base
 - **Type-safe** - written in TypeScript with strict mode
 - **Input sanitization** - all user inputs are validated and sanitized
