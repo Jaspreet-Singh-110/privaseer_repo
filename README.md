@@ -1,6 +1,6 @@
 # Privaseer
 
-**Version 2.4.0** - A production-ready, privacy-first Chrome extension that blocks trackers, scores your privacy, scans for deceptive cookie banners, and generates disposable burner emails to protect your identity online.
+**Version 1.0.0** - A production-ready, privacy-first Chrome extension that blocks trackers, scores your privacy, scans for deceptive cookie banners, and generates disposable burner emails to protect your identity online.
 
 > Built with TypeScript, React 18, and Manifest V3 for maximum performance and security.
 
