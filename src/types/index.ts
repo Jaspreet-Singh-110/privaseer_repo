@@ -38,6 +38,34 @@ export interface ConsentScanResult {
   isCompliant: boolean;
   deceptivePatterns: string[];
   timestamp: number;
+  cmpDetection?: CMPDetectionResult;
+  hasPersistedConsent?: boolean;
+}
+
+export interface CMPDetectionResult {
+  detected: boolean;
+  cmpType: string;
+  detectionMethod: 'cookie' | 'api' | 'banner' | 'hybrid';
+  confidenceScore: number;
+  consentStatus?: 'accepted' | 'rejected' | 'partial' | 'unknown';
+  cookieNames: string[];
+  tcfVersion?: string;
+  hasRejectButton?: boolean;
+}
+
+export interface ConsentState {
+  id: string;
+  installationId: string;
+  domain: string;
+  cmpType: string;
+  consentStatus: 'accepted' | 'rejected' | 'partial' | 'unknown';
+  hasRejectButton: boolean;
+  isCompliant: boolean;
+  cookieNames: string[];
+  tcfVersion?: string;
+  firstSeen: string;
+  lastVerified: string;
+  createdAt: string;
 }
 
 export interface StorageData {

@@ -42,7 +42,7 @@ export class PrivacyScoreManager {
 
     // Listen to non-compliant site events
     backgroundEvents.on('NON_COMPLIANT_SITE', async (data) => {
-      await this.handleNonCompliantSite(data.domain);
+      await this.handleNonCompliantSite(data.domain, data.severityMultiplier || 1.0);
     });
   }
 
@@ -133,7 +133,7 @@ export class PrivacyScoreManager {
     }
   }
 
-  static async handleNonCompliantSite(domain: string): Promise<number> {
+  static async handleNonCompliantSite(domain: string, severityMultiplier: number = 1.0): Promise<number> {
     try {
       const now = Date.now();
       const penaltyKey = `non-compliant:${domain}`;
@@ -150,13 +150,14 @@ export class PrivacyScoreManager {
 
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
-      const newScore = oldScore + this.NON_COMPLIANT_PENALTY;
+      const penalty = this.NON_COMPLIANT_PENALTY * severityMultiplier;
+      const newScore = oldScore + penalty;
 
       // Emit score update event
       backgroundEvents.emit('SCORE_UPDATED', {
         oldScore,
         newScore,
-        reason: 'Non-compliant cookie banner detected',
+        reason: `Non-compliant cookie banner detected (severity: ${severityMultiplier}x)`,
       });
 
       await Storage.recordNonCompliantSite();

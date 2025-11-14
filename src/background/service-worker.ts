@@ -94,9 +94,19 @@ function setupMessageHandlers(): void {
     }
     const result = data;
 
+    const urlObj = new URL(result.url);
+    const domain = urlObj.hostname;
+
+    if (result.hasPersistedConsent) {
+      logger.info('ServiceWorker', 'Site has valid persisted consent, skipping penalty', {
+        domain,
+        cmpType: result.cmpDetection?.cmpType,
+        consentStatus: result.cmpDetection?.consentStatus,
+      });
+      return { success: true };
+    }
+
     if (!result.isCompliant) {
-      const urlObj = new URL(result.url);
-      const domain = urlObj.hostname;
 
       // Check if we've already alerted about this domain recently (within 5 minutes)
       const lastAlertTime = consentAlertCache.get(domain);
@@ -108,8 +118,8 @@ function setupMessageHandlers(): void {
       }
 
       // Also check if there's already a recent alert in storage
-      const data = await Storage.get();
-      const recentAlert = data.alerts.find(
+      const storageData = await Storage.get();
+      const recentAlert = storageData.alerts.find(
         a => a.domain === domain &&
         a.message.includes('deceptive cookie banner') &&
         now - a.timestamp < 300000 // 5 minutes
@@ -124,17 +134,35 @@ function setupMessageHandlers(): void {
       // Set cache BEFORE creating alert to prevent race conditions
       consentAlertCache.set(domain, now);
 
-      // Emit non-compliant site event
+      // Calculate severity based on deceptive patterns
+      let severity: 'low' | 'medium' | 'high' = 'medium';
+      let severityMultiplier = 1.0;
+
+      if (result.deceptivePatterns && result.deceptivePatterns.length > 0) {
+        if (result.deceptivePatterns.includes('Forced Consent')) {
+          severity = 'high';
+          severityMultiplier = 2.0;
+        } else if (result.deceptivePatterns.includes('Hidden Reject')) {
+          severity = 'high';
+          severityMultiplier = 1.5;
+        } else if (result.deceptivePatterns.includes('Dark Pattern')) {
+          severity = 'medium';
+          severityMultiplier = 1.0;
+        }
+      }
+
+      // Emit non-compliant site event with severity multiplier
       backgroundEvents.emit('NON_COMPLIANT_SITE', {
         domain,
         url: result.url,
         deceptivePatterns: result.deceptivePatterns || [],
+        severityMultiplier,
       });
 
       await Storage.addAlert({
         id: `${Date.now()}-${Math.random()}`,
         type: 'non_compliant_site',
-        severity: 'medium',
+        severity,
         message: `${domain} has deceptive cookie banner`,
         domain,
         timestamp: Date.now(),

@@ -1,8 +1,9 @@
-import type { ConsentScanResult, PrivacyRules } from '../types';
+import type { ConsentScanResult, PrivacyRules, CMPDetectionResult } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
 import { SCANNER, CONSENT_BANNER } from '../utils/constants';
+import { detectCMP, hasValidPersistedConsent } from '../utils/cmp-detector';
 
 class ConsentScanner {
   private rules: PrivacyRules | null = null;
@@ -39,9 +40,49 @@ class ConsentScanner {
     if (!this.rules || !document.body) return;
 
     try {
+      const cmpDetection = await detectCMP();
+      const hasPersistedConsent = hasValidPersistedConsent(cmpDetection);
+
+      if (hasPersistedConsent && cmpDetection.consentStatus !== 'unknown') {
+        logger.info('ConsentScanner', 'Valid persisted consent detected, skipping compliance check', {
+          domain: window.location.hostname,
+          cmpType: cmpDetection.cmpType,
+          consentStatus: cmpDetection.consentStatus,
+          confidenceScore: cmpDetection.confidenceScore,
+        });
+
+        const result: ConsentScanResult = {
+          url: sanitizeUrl(window.location.href) || '',
+          hasBanner: false,
+          hasRejectButton: true,
+          isCompliant: true,
+          deceptivePatterns: [],
+          timestamp: Date.now(),
+          cmpDetection,
+          hasPersistedConsent: true,
+        };
+
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'CONSENT_SCAN_RESULT',
+            data: result,
+          });
+        } catch (error) {
+          logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
+        }
+
+        return;
+      }
+
       const banner = this.findCookieBanner();
 
       if (!banner) {
+        if (cmpDetection.detected && cmpDetection.cookieNames.length > 0) {
+          logger.debug('ConsentScanner', 'CMP cookies found but no banner visible (likely already dismissed)', {
+            domain: window.location.hostname,
+            cmpType: cmpDetection.cmpType,
+          });
+        }
         return;
       }
 
@@ -65,6 +106,8 @@ class ConsentScanner {
         isCompliant,
         deceptivePatterns,
         timestamp: Date.now(),
+        cmpDetection,
+        hasPersistedConsent: false,
       };
 
       try {
@@ -77,7 +120,8 @@ class ConsentScanner {
           logger.warn('ConsentScanner', 'Non-compliant cookie banner detected', {
             url: sanitizeUrl(window.location.href),
             hasRejectButton: result.hasRejectButton,
-            deceptivePatterns: result.deceptivePatterns
+            deceptivePatterns: result.deceptivePatterns,
+            cmpType: cmpDetection.cmpType,
           });
         }
       } catch (error) {
