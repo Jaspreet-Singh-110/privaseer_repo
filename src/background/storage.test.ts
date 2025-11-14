@@ -1,0 +1,66 @@
+import { describe, it, expect, vi } from 'vitest';
+import { Storage } from './storage';
+
+describe('Storage', () => {
+  it('should initialize with default data', async () => {
+    await Storage.initialize();
+    const data = await Storage.get();
+
+    expect(data).toHaveProperty('privacyScore');
+    expect(data.privacyScore.current).toBeGreaterThanOrEqual(0);
+    expect(data.privacyScore.current).toBeLessThanOrEqual(100);
+    expect(data).toHaveProperty('alerts');
+    expect(data).toHaveProperty('trackers');
+    expect(data).toHaveProperty('settings');
+  });
+
+  it('should update privacy score', async () => {
+    await Storage.updateScore(75);
+    const data = await Storage.get();
+    expect(data.privacyScore.current).toBe(75);
+  });
+
+  it('should clamp score to 0-100 range', async () => {
+    await Storage.updateScore(-10);
+    let data = await Storage.get();
+    expect(data.privacyScore.current).toBe(0);
+
+    await Storage.updateScore(150);
+    data = await Storage.get();
+    expect(data.privacyScore.current).toBe(100);
+  });
+
+  it('should add alerts', async () => {
+    const initialData = await Storage.get();
+    const initialCount = initialData.alerts.length;
+
+    const alert = {
+      type: 'tracker' as const,
+      severity: 'high' as const,
+      domain: `tracker-${Date.now()}.com`,
+      message: 'Tracker blocked',
+      timestamp: Date.now(),
+    };
+
+    await Storage.addAlert(alert);
+    const data = await Storage.get();
+
+    expect(data.alerts.length).toBeGreaterThan(initialCount);
+  });
+
+  it('should clear all alerts', async () => {
+    await Storage.clearAlerts();
+    const data = await Storage.get();
+    expect(data.alerts.length).toBe(0);
+  });
+
+  it('should toggle protection', async () => {
+    const initialState = (await Storage.get()).settings.protectionEnabled;
+    const newState = await Storage.toggleProtection();
+    expect(newState).toBe(!initialState);
+  });
+
+  it('should handle storage get operation', async () => {
+    await expect(Storage.get()).resolves.toBeDefined();
+  });
+});
